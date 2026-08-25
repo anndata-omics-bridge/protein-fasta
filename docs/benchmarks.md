@@ -15,4 +15,5 @@ it returns named immutable `FastaRecord` values and applies the strict shared wh
 contract. This is a measurement, not a speed gate. Consumer integration should re-run it on large
 plain and compressed inputs and profile before changing the record contract.
 
-The reproducible counting function is [`benchmarks/benchmark_reading.py`](../benchmarks/benchmark_reading.py).
+The reproducible counting function is
+[`benchmarks/benchmark_reading.py`](https://github.com/anndata-omics-bridge/protein-fasta/blob/main/benchmarks/benchmark_reading.py).

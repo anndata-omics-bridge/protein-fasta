@@ -1,0 +1,20 @@
+site_name: Protein FASTA
+site_description: Streaming protein FASTA parsing, interpretation, classification, and validation.
+site_url: https://anndata-omics-bridge.github.io/protein-fasta/
+repo_url: https://github.com/anndata-omics-bridge/protein-fasta
+repo_name: anndata-omics-bridge/protein-fasta
+docs_dir: docs
+site_dir: public
+
+theme:
+  name: material
+
+nav:
+  - Home: index.md
+  - Architecture: architecture.md
+  - Benchmarks: benchmarks.md
+
+markdown_extensions:
+  - admonition
+  - pymdownx.highlight
+  - pymdownx.superfences

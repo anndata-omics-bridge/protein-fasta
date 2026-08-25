@@ -47,11 +47,14 @@ the values needed by their operations.
 
 See the maintained [architecture](docs/architecture.md) and initial [reader benchmark](docs/benchmarks.md).
 
+The rendered documentation is published through GitHub Pages.
+
 ## Development
 
 ```bash
 uv sync --group dev
 make check
+make docs
 .venv/bin/pre-commit install --hook-type pre-commit --hook-type pre-push
 ```
 

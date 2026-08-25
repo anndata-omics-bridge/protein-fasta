@@ -14,6 +14,7 @@ The closest `AGENTS.md` wins. Explicit user instructions override this file.
 | Architecture | `.venv/bin/lint-imports` |
 | Tests | `.venv/bin/pytest --cov --cov-branch` |
 | Build | `uv build && .venv/bin/twine check dist/*` |
+| Documentation | `make docs` |
 | Full gate | `make check` |
 
 ## Code conventions
