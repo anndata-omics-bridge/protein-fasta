@@ -1,0 +1,80 @@
+[importlinter]
+root_packages =
+    protein_fasta
+include_external_packages = True
+
+[importlinter:contract:package-tree]
+name = Root composition owns independent children
+type = layers
+containers =
+    protein_fasta
+exhaustive = True
+layers =
+    compile
+    reading | headers | classification | validation | schema
+
+[importlinter:contract:reading-tree]
+name = Reading parser depends on its record values
+type = layers
+containers =
+    protein_fasta.reading
+exhaustive = True
+layers =
+    parser
+    record
+
+[importlinter:contract:headers-tree]
+name = UniProt interpretation extends generic header values
+type = layers
+containers =
+    protein_fasta.headers
+exhaustive = True
+layers =
+    uniprot
+    generic
+
+[importlinter:contract:classification-tree]
+name = Classification operations share only entry kinds
+type = layers
+containers =
+    protein_fasta.classification
+exhaustive = True
+layers =
+    classifier | patterns
+    kinds
+
+[importlinter:contract:validation-tree]
+name = Validation operations are independent
+type = independence
+modules =
+    protein_fasta.validation.sequence
+    protein_fasta.validation.namespace
+
+[importlinter:contract:schema-tree]
+name = Schema documents share only their schema base
+type = layers
+containers =
+    protein_fasta.schema
+exhaustive = True
+layers =
+    headers | classification | validation
+    base
+
+[importlinter:contract:runtime-framework-isolation]
+name = Runtime children do not import storage or consumer frameworks
+type = forbidden
+source_modules =
+    protein_fasta.reading
+    protein_fasta.headers
+    protein_fasta.classification
+    protein_fasta.validation
+forbidden_modules =
+    pydantic
+    pandas
+    polars
+    numpy
+    anndata
+    mudata
+    anndata_proteomics
+    fasta_gen
+    prozor

@@ -1,0 +1,11 @@
+# This file is managed by Copier. Do not edit it manually.
+_src_path: /Users/wolski/projects/anndata_bridge/python_package_template
+author_email: wew@fgcz.ethz.ch
+author_name: Witold Wolski
+description: Streaming protein FASTA parsing, header interpretation, classification,
+    and validation.
+distribution_name: protein-fasta
+license_spdx: MIT
+package_name: protein_fasta
+project_name: Protein FASTA
+python_min: '3.13'
