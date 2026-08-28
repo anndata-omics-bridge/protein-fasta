@@ -1,5 +1,8 @@
 # Changes
 
+- 2026-08-28: Declared `license-files`, without which uv_build shipped wheels carrying no licence
+  text even though the repository had a `LICENSE` file.
+
 - 2026-08-28: Added the build workflow API: packaged or explicit profile JSON resolves with a
   per-run request and typed CLI overrides into a replayable effective request, then
   `run_database_build()` writes the effective JSON before source reading and a typed result JSON
