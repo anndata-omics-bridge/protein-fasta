@@ -208,22 +208,20 @@ entrapment-overlap analysis with decoy comparison.
 
 ```mermaid
 flowchart TB
-    A["packaged build policy<br/>naming · metadata · diagnostics"] --> D(["resolve biological request"])
-    B["explicit build policy<br/>project-specific defaults"] --> D
-    C["run parameters<br/>identity · date · output<br/>optional entrapment"] --> D
-    E["explicit CLI overrides<br/>only values actually supplied"] --> D
+    A["biological parameter layers<br/>packaged build policy<br/>explicit project policy<br/>run identity · date · output · entrapment<br/>explicit CLI overrides"] --> D(["resolve biological request<br/>in precedence order"])
     D --> F["effective biological request<br/>resolved paths and values"]
     F --> G(["build biological database"])
     G --> H["biological result evidence"]
-    I["decoy request parameters<br/>one required strategy"] --> J(["resolve decoy request"])
-    K["explicit decoy CLI overrides<br/>output · prefix"] --> J
-    J --> L(["generate search database"])
+    H ~~~ I["independent decoy parameter layers<br/>one required strategy<br/>explicit output · prefix overrides"]
+    I --> J(["resolve decoy request"])
+    J --> K["effective decoy request<br/>resolved strategy and destination"]
+    K --> L(["generate search database"])
     L --> M["decoy result evidence"]
 
     classDef compute fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d2742
     classDef data fill:#e8f5e9,stroke:#2e7d32,stroke-width:1.5px,color:#143d1c
     class D,G,J,L compute
-    class A,B,C,E,F,H,I,K,M data
+    class A,F,H,I,K,M data
 ```
 
 *Figure 6. Resolve biological-build and decoy parameters independently.*
