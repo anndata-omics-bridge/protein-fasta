@@ -8,6 +8,7 @@ import os
 import sqlite3
 from collections import Counter
 from collections.abc import Iterator
+from contextlib import closing
 from io import StringIO
 from pathlib import Path
 from typing import Never
@@ -1032,7 +1033,7 @@ def test_an_older_schema_is_refused_with_the_command_that_fixes_it(
     the message has to name the full rebuild specifically.
     """
     registry_path = tmp_path / "registry.sqlite3"
-    with sqlite3.connect(registry_path) as connection:
+    with closing(sqlite3.connect(registry_path)) as connection, connection:
         stamp_sqlite_schema_version(connection, 2)
 
     with (

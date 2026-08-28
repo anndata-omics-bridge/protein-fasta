@@ -1,5 +1,12 @@
 # Changes
 
+- 2026-08-28: Corrected the recursive `build/` ignore rule that excluded the database-build
+  implementation and its tests from Git. Moved the tests to the discoverable `tests/database_build/`
+  capability folder, added direct shuffled/foreign entrapment assembly coverage, and closed the raw
+  SQLite connection used by the old-schema test. Kept ordinary reverse-decoy builds in the base/CLI
+  installation while isolating shuffle, DecoyPYrat, and entrapment adapters behind the explicit
+  `generation` extra with actionable missing-extra errors.
+
 - 2026-08-28: Added `table --checksums` with per-row normalized `sequence_hash` and versioned
   `id_sequence_fingerprint` columns, and demonstrated the concise export in the executable
   walkthrough.

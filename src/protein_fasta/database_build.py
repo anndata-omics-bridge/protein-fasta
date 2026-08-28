@@ -32,22 +32,16 @@ import tempfile
 from collections.abc import Iterable
 from dataclasses import dataclass, field, replace
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from fdr_benchmark.provenance import format_peptide_pairs
 from loguru import logger
 
 from protein_fasta.analytics.hashing import FILE_CHECKSUM_VERSION, file_checksum
 from protein_fasta.build.generation.decoy import (
     DEFAULT_DECOY_SPEC,
-    DecoyBatch,
     make_decoy_generation,
 )
-from protein_fasta.build.generation.entrapment import (
-    EntrapmentBatch,
-    EntrapmentGeneration,
-    make_entrapment_generation,
-)
+from protein_fasta.build.generation.decoy_types import DecoyBatch
 from protein_fasta.build.metadata import build_section_marker_header, build_sentinel_header
 from protein_fasta.build.naming import build_dbname, build_fasta_name
 from protein_fasta.diagnostics.messages import describe_illegal_residues
@@ -67,11 +61,39 @@ from protein_fasta.summary import FastaSummary, summarize_sequences
 from protein_fasta.validation.sequence import normalize_sequence
 from protein_fasta.writing import write_records
 
+if TYPE_CHECKING:
+    from fdr_benchmark.models import PeptidePairRecord
+
+    from protein_fasta.build.generation.entrapment import (
+        EntrapmentBatch,
+        EntrapmentGeneration,
+    )
+
 Entry = tuple[str, str]
 
 #: Conflicting ids named in the error before it summarizes the rest. Enough to act
 #: on, few enough to read.
 _REPORTED_CONFLICTS = 5
+
+
+def _make_entrapment_generation(spec: EntrapmentDocument) -> EntrapmentGeneration:
+    """Load the optional entrapment adapter only when a build selects it."""
+    try:
+        from protein_fasta.build.generation.entrapment import make_entrapment_generation
+    except ModuleNotFoundError as error:
+        missing_name = error.name or ""
+        if missing_name == "fdr_benchmark" or missing_name.startswith("fdr_benchmark."):
+            message = "entrapment generation requires the 'protein-fasta[generation]' extra"
+            raise RuntimeError(message) from error
+        raise
+    return make_entrapment_generation(spec)
+
+
+def _format_entrapment_pairs(pairs: tuple[PeptidePairRecord, ...]) -> str:
+    """Format mappings through the package that generated them."""
+    from fdr_benchmark.provenance import format_peptide_pairs
+
+    return format_peptide_pairs(pairs)
 
 
 @dataclass(frozen=True, slots=True)
@@ -230,7 +252,7 @@ def build_database(
     resolved_blocks = list(contaminant_blocks)
     decoy_generation = make_decoy_generation(decoy_spec)
     entrapment_generation: EntrapmentGeneration | None = (
-        None if entrapment_spec is None else make_entrapment_generation(entrapment_spec)
+        None if entrapment_spec is None else _make_entrapment_generation(entrapment_spec)
     )
     sentinel_cfg = metadata
     if installer is not None:
@@ -360,7 +382,7 @@ def build_database(
         # exist -- which a paired FDP estimate would then silently be run against.
         pairs_path = out_path.with_suffix(f"{out_path.suffix}.entrapment_pairs.tsv")
         pairs_path.write_text(
-            format_peptide_pairs(entrapment_batch.peptide_pairs), encoding="utf-8"
+            _format_entrapment_pairs(entrapment_batch.peptide_pairs), encoding="utf-8"
         )
 
     summary = summarize_sequences(seq for _, seq in final)

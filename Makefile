@@ -40,7 +40,13 @@ build:  ## Build, validate, and smoke-test source and wheel distributions
 	$(VENV_BIN)/twine check dist/*
 	uv run --isolated --no-project --no-cache \
 		--with "$$(printf '%s\n' dist/*.whl)" \
-		python -c 'import importlib.util; import protein_fasta.record; assert importlib.util.find_spec("polars") is None'
+		python -c 'import importlib.util; import protein_fasta.database_build; import protein_fasta.record; assert importlib.util.find_spec("polars") is None'
+	@output="$$(uv run --isolated --no-project --no-cache \
+		--with "$$(printf '%s\n' dist/*.whl)" \
+		python -c 'from protein_fasta.build.generation.decoy import make_decoy_generation; from protein_fasta.schema.build import DecoyDocument, DecoyMode; make_decoy_generation(DecoyDocument(mode=DecoyMode.SHUFFLE))' 2>&1)"; \
+		status=$$?; \
+		test $$status -ne 0; \
+		printf '%s\n' "$$output" | grep -Fq "protein-fasta[generation]"
 	uv run --isolated --no-project --no-cache \
 		--with 'pytest>=9,<10' \
 		--with "$$(printf '%s\n' dist/*.whl)[frame]" \

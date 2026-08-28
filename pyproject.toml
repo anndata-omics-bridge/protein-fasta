@@ -23,7 +23,6 @@ protein-fasta = "protein_fasta.cli:main"
 [project.optional-dependencies]
 cli = [
     "cyclopts>=4.20,<5",
-    "fdr_benchmark @ git+https://gitlab.bfabric.org/bioinformatics/fdr_benchmark.git@bbf582e382833cf8bdc439e69edb287842293b02",
     "loguru>=0.7,<1",
     "polars>=1.43.2,<2",
     "xlsxwriter>=3.2,<4",

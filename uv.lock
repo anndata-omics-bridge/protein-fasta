@@ -882,7 +882,6 @@ dependencies = [
 [package.optional-dependencies]
 cli = [
     { name = "cyclopts" },
-    { name = "fdr-benchmark" },
     { name = "loguru" },
     { name = "polars" },
     { name = "xlsxwriter" },
@@ -920,7 +919,6 @@ docs = [
 requires-dist = [
     { name = "cyclopts", marker = "extra == 'cli'", specifier = ">=4.20,<5" },
     { name = "duckdb", marker = "extra == 'duckdb'", specifier = ">=1.4.2,<2" },
-    { name = "fdr-benchmark", marker = "extra == 'cli'", git = "https://gitlab.bfabric.org/bioinformatics/fdr_benchmark.git?rev=bbf582e382833cf8bdc439e69edb287842293b02" },
     { name = "fdr-benchmark", marker = "extra == 'generation'", git = "https://gitlab.bfabric.org/bioinformatics/fdr_benchmark.git?rev=bbf582e382833cf8bdc439e69edb287842293b02" },
     { name = "loguru", specifier = ">=0.7,<1" },
     { name = "loguru", marker = "extra == 'cli'", specifier = ">=0.7,<1" },
