@@ -24,19 +24,22 @@ from protein_fasta.analytics.hashing import (
 from protein_fasta.analytics_compile import make_digestion
 from protein_fasta.compile import make_diagnostic_rules
 from protein_fasta.database_build import (
-    ContaminantBlock,
-    build_database,
-    write_build_manifest,
+    BuildDecoyOverride,
+    DatabaseBuildOverrides,
+    resolve_database_build,
+    run_database_build,
 )
 from protein_fasta.diagnostic_summary import (
     ProteinDiagnosticsSummary,
     summarize_protein_diagnostics,
 )
 from protein_fasta.documents import (
+    load_builtin_database_build_profile,
     load_builtin_diagnostic_document,
     load_builtin_entry_classifier_document,
     load_builtin_header_format_catalog,
-    load_database_build_document,
+    load_database_build_profile,
+    load_database_build_request,
     load_digestion_document,
     load_entry_classifier_document,
     load_header_format_catalog,
@@ -50,7 +53,6 @@ from protein_fasta.frame import (
     read_strict_configured_protein_frame,
     read_strict_protein_frame,
 )
-from protein_fasta.reading.parser import read_records
 from protein_fasta.record import iter_protein_diagnostics, iter_proteins
 from protein_fasta.registry.backend import factory as registry_backends
 from protein_fasta.registry.backend.base import RegistryConnection
@@ -67,7 +69,6 @@ from protein_fasta.registry.indexing import (
     rebuild_registry,
 )
 from protein_fasta.registry.kinds import EntryKind
-from protein_fasta.registry.rules import load_registry_diagnostics
 from protein_fasta.schema.analytics import DigestionDocument
 from protein_fasta.schema.build import MetadataDocument, NamingDocument
 from protein_fasta.schema.registry import RegistryBackendDocument, RegistryDocument
@@ -417,67 +418,45 @@ def checksum(fasta_path: Path) -> None:
     )
 
 
-def _configured_path(path: Path, root: Path) -> Path:
-    return path if path.is_absolute() else root / path
-
-
-def _entries(paths: tuple[Path, ...]) -> list[tuple[str, str]]:
-    return [(record.raw_header, record.sequence) for path in paths for record in read_records(path)]
-
-
 @app.command
-def build(config: Path) -> None:
-    """Build one reproducible FASTA database from a JSON request.
+def build(
+    config: Path,
+    *,
+    profile: Path | None = None,
+    date: datetime.date | None = None,
+    decoy: BuildDecoyOverride | None = None,
+) -> None:
+    """Build one reproducible FASTA database from profile and request JSON.
 
-    Relative paths in the document are resolved beside the JSON file. The command
-    writes a ``.manifest.json`` beside the FASTA with effective configuration,
-    versioned MD5 file checksums, generation settings, and build counts.
+    Relative request paths resolve beside the request file. Profile defaults are
+    overridden by request values and then by explicitly supplied CLI options. The
+    effective request is written before sequence work starts; the final result JSON
+    records artifacts, checksums, counts, summaries, normalization, and generation.
 
     Args:
-        config: Complete database-build JSON document.
+        config: Per-run database-build request JSON.
+        profile: Optional portable defaults JSON; packaged FGCZ defaults are used otherwise.
+        date: Optional build-date override.
+        decoy: Optional decoy-mode override, including ``none``.
     """
-    request = load_database_build_document(config)
-    root = config.parent
-    target_paths = tuple(_configured_path(path, root) for path in request.targets)
-    foreign_paths = tuple(_configured_path(path, root) for path in request.foreign_sources)
-    block_paths = tuple(_configured_path(block.path, root) for block in request.contaminant_blocks)
-    blocks = tuple(
-        ContaminantBlock(
-            name=document.name,
-            description=document.description,
-            entries=tuple(_entries((path,))),
-        )
-        for document, path in zip(request.contaminant_blocks, block_paths, strict=True)
-    )
-    output_dir = _configured_path(request.output_dir, root)
-    output_dir.mkdir(parents=True, exist_ok=True)
-    diagnostics_path = (
-        None if request.diagnostics is None else _configured_path(request.diagnostics, root)
-    )
-    result = build_database(
-        targets=_entries(target_paths),
-        name_fields=request.name_fields,
-        naming=request.naming,
-        metadata=request.metadata,
-        diagnostics=load_registry_diagnostics(diagnostics_path),
-        output_dir=output_dir,
-        date=request.date,
-        template=request.template,
-        contaminant_blocks=blocks,
-        add_decoys=request.add_decoys,
-        decoy_spec=request.decoy,
-        entrapment_spec=request.entrapment,
-        foreign_entries=_entries(foreign_paths),
-        annotation=request.annotation,
-        installer=request.installer,
-    )
-    manifest_path = write_build_manifest(
+    request = load_database_build_request(config)
+    if profile is None:
+        build_profile = load_builtin_database_build_profile()
+        profile_base = config.parent
+    else:
+        build_profile = load_database_build_profile(profile)
+        profile_base = profile.parent
+    effective = resolve_database_build(
+        build_profile,
         request,
-        result,
-        (*target_paths, *block_paths, *foreign_paths),
+        profile_base=profile_base,
+        request_base=config.parent,
+        overrides=DatabaseBuildOverrides(date=date, decoy=decoy),
     )
-    logger.info("Built {} entries -> {}", result.n_total, result.path)
-    logger.info("Manifest -> {}", manifest_path)
+    execution = run_database_build(effective)
+    logger.info("Built {} entries -> {}", execution.result.n_total, execution.result.path)
+    logger.info("Effective request -> {}", execution.effective_request_path)
+    logger.info("Result -> {}", execution.result_path)
 
 
 @app.command

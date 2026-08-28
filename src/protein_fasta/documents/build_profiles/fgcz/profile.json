@@ -1,0 +1,52 @@
+{
+  "schema_version": "0.2",
+  "naming": {
+    "default_dbname": "project",
+    "allowed_dbname_fields": ["project", "dbn", "description", "taxid"],
+    "dbname": {
+      "project": "p{project}_db{dbn}_{description}",
+      "fgcz": "fgcz_{taxid}_{description}",
+      "derived": "{description}"
+    },
+    "filename": {
+      "decoy": "{dbname}_{decoy_token}_{date}.{extension}",
+      "nondecoy": "{dbname}_{date}.{extension}",
+      "entrapment_decoy": "{dbname}_{entrapment_token}_{decoy_token}_{date}.{extension}",
+      "entrapment_nondecoy": "{dbname}_{entrapment_token}_{date}.{extension}"
+    },
+    "description": {
+      "mode_flags": {
+        "swissprot": "sp",
+        "swissprot_trembl": "",
+        "one_seq_per_gene": "1spg"
+      }
+    },
+    "decoy_token": "d",
+    "entrapment_token": "e",
+    "separator": "_",
+    "date_format": "%Y%m%d",
+    "extension": "fasta"
+  },
+  "metadata": {
+    "id_namespace": "aa",
+    "body_sequence": "CRAPCRAPCRAP",
+    "marker_body_sequence": "MRECRAPCRAPCRAP",
+    "date_format": "%Y-%m-%d",
+    "provenance_template": "generated w {tool} and installed by {installer}, {org}",
+    "tool": "protein-fasta",
+    "installer": "",
+    "org": "fgcz"
+  },
+  "diagnostics": null,
+  "default_decoy": {
+    "mode": "reverse",
+    "seed": 2000,
+    "digestion": {
+      "enzyme": "trypsin",
+      "missed_cleavages": 0,
+      "min_length": 7,
+      "max_length": 50
+    }
+  },
+  "default_entrapment": null
+}

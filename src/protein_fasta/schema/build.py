@@ -159,8 +159,7 @@ class DatabaseBuildDocument(DocumentBase):
     metadata: MetadataDocument = Field(default_factory=MetadataDocument)
     diagnostics: Path | None = None
     contaminant_blocks: tuple[ContaminantBlockDocument, ...] = ()
-    add_decoys: bool = True
-    decoy: DecoyDocument = Field(default_factory=DecoyDocument)
+    decoy: DecoyDocument | None = Field(default_factory=DecoyDocument)
     entrapment: EntrapmentDocument | None = None
     foreign_sources: tuple[Path, ...] = ()
     annotation: str = ""
@@ -179,6 +178,152 @@ class DatabaseBuildDocument(DocumentBase):
                 f"allowed: {sorted(self.naming.allowed_dbname_fields)}"
             )
         return self
+
+
+class DatabaseBuildProfileDocument(DocumentBase):
+    """Portable defaults shared by a family of protein database builds."""
+
+    schema_version: Literal["0.2"] = "0.2"
+    naming: NamingDocument = Field(default_factory=NamingDocument)
+    metadata: MetadataDocument = Field(default_factory=MetadataDocument)
+    diagnostics: Path | None = None
+    default_decoy: DecoyDocument | None = Field(default_factory=DecoyDocument)
+    default_entrapment: EntrapmentDocument | None = None
+
+
+class DatabaseBuildRequestDocument(DocumentBase):
+    """Per-run sources, identity, destination, and explicit policy overrides."""
+
+    schema_version: Literal["0.2"] = "0.2"
+    targets: tuple[Path, ...] = Field(min_length=1)
+    output_dir: Path
+    date: datetime.date
+    name_fields: dict[str, str | int]
+    template: str | None = None
+    naming: NamingDocument | None = None
+    metadata: MetadataDocument | None = None
+    diagnostics: Path | None = None
+    contaminant_blocks: tuple[ContaminantBlockDocument, ...] = ()
+    decoy: DecoyDocument | None = None
+    entrapment: EntrapmentDocument | None = None
+    foreign_sources: tuple[Path, ...] = ()
+    annotation: str = ""
+    installer: str | None = None
+
+
+class EffectiveDatabaseBuildDocument(DocumentBase):
+    """Fully resolved and directly replayable protein database build request."""
+
+    schema_version: Literal["0.2"] = "0.2"
+    targets: tuple[Path, ...] = Field(min_length=1)
+    output_dir: Path
+    date: datetime.date
+    name_fields: dict[str, str | int]
+    template: str
+    naming: NamingDocument
+    metadata: MetadataDocument
+    diagnostics: Path | None = None
+    contaminant_blocks: tuple[ContaminantBlockDocument, ...] = ()
+    decoy: DecoyDocument | None = None
+    entrapment: EntrapmentDocument | None = None
+    foreign_sources: tuple[Path, ...] = ()
+    annotation: str = ""
+    installer: str | None = None
+
+    @model_validator(mode="after")
+    def validate_naming_request(self) -> EffectiveDatabaseBuildDocument:
+        """Reject unresolved naming choices before any source file is read."""
+        if self.template not in self.naming.dbname:
+            raise ValueError(f"template {self.template!r} is not configured in naming.dbname")
+        unsupported = self.name_fields.keys() - set(self.naming.allowed_dbname_fields)
+        if unsupported:
+            raise ValueError(
+                f"name_fields contains unsupported fields: {sorted(unsupported)}; "
+                f"allowed: {sorted(self.naming.allowed_dbname_fields)}"
+            )
+        return self
+
+
+class BuildArtifactDocument(DocumentBase):
+    """One checksummed file participating in a database-build result."""
+
+    schema_name: str
+    schema_version: str
+    path: Path
+    checksum_version: str
+    checksum: str
+    byte_count: int = Field(ge=0)
+    row_count: int | None = Field(default=None, ge=0)
+
+
+class DatabaseBuildCountsDocument(DocumentBase):
+    """Mutually reconcilable entry counts for one produced FASTA."""
+
+    target: int = Field(ge=0)
+    contaminant: int = Field(ge=0)
+    entrapment: int = Field(ge=0)
+    decoy: int = Field(ge=0)
+    total: int = Field(ge=0)
+
+
+class DatabaseBuildNormalizationDocument(DocumentBase):
+    """Exact input changes made before database assembly."""
+
+    upper_cased: int = Field(ge=0)
+    terminal_stops_stripped: int = Field(ge=0)
+    duplicates_dropped: int = Field(ge=0)
+
+
+class DatabaseBuildSummaryDocument(DocumentBase):
+    """Sequence-length and amino-acid summary persisted with a build."""
+
+    n_sequences: int = Field(ge=0)
+    length_min: int | None = Field(default=None, ge=0)
+    length_max: int | None = Field(default=None, ge=0)
+    length_mean: float | None = Field(default=None, ge=0)
+    length_q1: float | None = Field(default=None, ge=0)
+    length_median: float | None = Field(default=None, ge=0)
+    length_q3: float | None = Field(default=None, ge=0)
+    total_residues: int = Field(ge=0)
+    aa_counts: dict[str, int]
+    aa_frequencies: dict[str, float]
+
+
+class DatabaseBuildDecoyEvidenceDocument(DocumentBase):
+    """Decoy algorithm identity and collision outcomes."""
+
+    mode: str
+    seed: int | None = None
+    initial_collisions: int = Field(ge=0)
+    unresolved_collisions: int = Field(ge=0)
+    dropped_peptides: int = Field(ge=0)
+    omitted_decoys: int = Field(ge=0)
+
+
+class DatabaseBuildEntrapmentEvidenceDocument(DocumentBase):
+    """Entrapment strategy identity and achieved multiplicity."""
+
+    strategy: str
+    seed: int
+    requested_fold: int = Field(ge=1)
+    achieved_fold: int = Field(ge=0)
+    failures: int = Field(ge=0)
+    proteins_affected: int = Field(ge=0)
+    source_proteins: int = Field(ge=0)
+
+
+class DatabaseBuildResultDocument(DocumentBase):
+    """Versioned machine-readable evidence for one completed database build."""
+
+    schema_version: Literal["0.2"] = "0.2"
+    protein_fasta_version: str
+    effective_request: EffectiveDatabaseBuildDocument
+    artifacts: tuple[BuildArtifactDocument, ...]
+    counts: DatabaseBuildCountsDocument
+    normalization: DatabaseBuildNormalizationDocument
+    summary: DatabaseBuildSummaryDocument
+    decoy: DatabaseBuildDecoyEvidenceDocument | None = None
+    entrapment: DatabaseBuildEntrapmentEvidenceDocument | None = None
 
 
 def _template_fields(template: str, *, source: str) -> set[str]:

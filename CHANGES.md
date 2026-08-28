@@ -1,5 +1,14 @@
 # Changes
 
+- 2026-08-28: Added the build workflow API: packaged or explicit profile JSON resolves with a
+  per-run request and typed CLI overrides into a replayable effective request, then
+  `run_database_build()` writes the effective JSON before source reading and a typed result JSON
+  after completion. The result records relative checksummed artifacts, complete length/amino-acid
+  summaries, reconciled counts, normalization, and generation evidence. `protein-fasta build`
+  owns the optional decoy stage directly; the low-level `add_decoys` boolean was removed in favor
+  of an absent or present decoy specification. Added portrait workflow and class diagrams before
+  the implementation documentation.
+
 - 2026-08-28: Corrected the recursive `build/` ignore rule that excluded the database-build
   implementation and its tests from Git. Moved the tests to the discoverable `tests/database_build/`
   capability folder, added direct shuffled/foreign entrapment assembly coverage, and closed the raw

@@ -11,6 +11,7 @@ theme:
 
 nav:
   - Home: index.md
+  - Workflows: workflows.md
   - API: api.md
   - Rules and detection: configuration.md
   - CLI: cli.md
@@ -28,4 +29,11 @@ plugins:
 markdown_extensions:
   - admonition
   - pymdownx.highlight
-  - pymdownx.superfences
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+
+extra_javascript:
+  - https://unpkg.com/mermaid@11/dist/mermaid.min.js

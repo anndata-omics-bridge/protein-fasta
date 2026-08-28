@@ -278,7 +278,7 @@
     }
   },
   "additionalProperties": false,
-  "description": "Complete reproducible request for one protein database build.",
+  "description": "Per-run sources, identity, destination, and explicit policy overrides.",
   "properties": {
     "annotation": {
       "default": "",
@@ -306,7 +306,8 @@
         {
           "type": "null"
         }
-      ]
+      ],
+      "default": null
     },
     "diagnostics": {
       "anyOf": [
@@ -354,7 +355,15 @@
       "title": "Installer"
     },
     "metadata": {
-      "$ref": "#/$defs/MetadataDocument"
+      "anyOf": [
+        {
+          "$ref": "#/$defs/MetadataDocument"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
     },
     "name_fields": {
       "additionalProperties": {
@@ -371,7 +380,15 @@
       "type": "object"
     },
     "naming": {
-      "$ref": "#/$defs/NamingDocument"
+      "anyOf": [
+        {
+          "$ref": "#/$defs/NamingDocument"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
     },
     "output_dir": {
       "format": "path",
@@ -379,8 +396,8 @@
       "type": "string"
     },
     "schema_version": {
-      "const": "0.1",
-      "default": "0.1",
+      "const": "0.2",
+      "default": "0.2",
       "title": "Schema Version",
       "type": "string"
     },
@@ -412,6 +429,6 @@
     "date",
     "name_fields"
   ],
-  "title": "DatabaseBuildDocument",
+  "title": "DatabaseBuildRequestDocument",
   "type": "object"
 }

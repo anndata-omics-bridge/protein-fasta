@@ -44,18 +44,23 @@ part of the result and prevent algorithm ambiguity.
 
 ```bash
 protein-fasta build build.json
+protein-fasta build request.json \
+  --profile fgcz.json \
+  --date 2026-08-28 \
+  --decoy reverse
 ```
 
-The JSON is the whole request, so reproducibility does not depend on remembering many switches.
-Relative paths resolve beside the JSON document. The command writes the FASTA and a
-`.fasta.manifest.json` sidecar with the effective request, package version, MD5 checksums for every
-input and the output, counts, normalization changes, and generation evidence.
+The request JSON owns per-run facts; an optional profile JSON owns reusable defaults. Relative
+request paths resolve beside the request file. Precedence is packaged FGCZ profile, explicit
+profile, request, then CLI options that were actually supplied. The command writes the effective
+request before sequence work and a `.fasta.result.json` afterward with typed artifacts, package
+version, checksums, counts, summaries, normalization changes, and generation evidence.
 
 A minimal request is:
 
 ```json
 {
-  "schema_version": "0.1",
+  "schema_version": "0.2",
   "targets": ["human.fasta"],
   "output_dir": "build",
   "date": "2026-08-27",
@@ -64,16 +69,15 @@ A minimal request is:
     "dbn": 1,
     "description": "human"
   },
-  "add_decoys": true,
   "decoy": {
     "mode": "reverse"
   }
 }
 ```
 
-The document can additionally embed naming/metadata rules, named contaminant blocks, an explicit
+The request can override naming/metadata rules, named contaminant blocks, an explicit
 registry-diagnostic document, shuffled or DecoyPYrat settings, and shuffled or foreign-species
-entrapment settings.
+entrapment settings. Set `"decoy": null` or pass `--decoy none` for a target-only database.
 
 ## Registry indexing and analytics
 

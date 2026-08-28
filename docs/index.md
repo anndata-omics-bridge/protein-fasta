@@ -20,5 +20,6 @@ The package deliberately excludes AnnData/MuData persistence, peptide matching, 
 inference, application installation, the curated contaminant/QC catalog, and UniProt download at
 this stage.
 
-Continue with the [API reference](api.md), [rule configuration](configuration.md),
-[CLI guide](cli.md), [architecture](architecture.md), or [benchmarks](benchmarks.md).
+Start with the [build workflows](workflows.md), then continue with the [API reference](api.md),
+[rule configuration](configuration.md), [CLI guide](cli.md),
+[architecture](architecture.md), or [benchmarks](benchmarks.md).

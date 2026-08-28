@@ -278,7 +278,7 @@
     }
   },
   "additionalProperties": false,
-  "description": "Complete reproducible request for one protein database build.",
+  "description": "Fully resolved and directly replayable protein database build request.",
   "properties": {
     "annotation": {
       "default": "",
@@ -306,7 +306,8 @@
         {
           "type": "null"
         }
-      ]
+      ],
+      "default": null
     },
     "diagnostics": {
       "anyOf": [
@@ -379,8 +380,8 @@
       "type": "string"
     },
     "schema_version": {
-      "const": "0.1",
-      "default": "0.1",
+      "const": "0.2",
+      "default": "0.2",
       "title": "Schema Version",
       "type": "string"
     },
@@ -394,24 +395,19 @@
       "type": "array"
     },
     "template": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "title": "Template"
+      "title": "Template",
+      "type": "string"
     }
   },
   "required": [
     "targets",
     "output_dir",
     "date",
-    "name_fields"
+    "name_fields",
+    "template",
+    "naming",
+    "metadata"
   ],
-  "title": "DatabaseBuildDocument",
+  "title": "EffectiveDatabaseBuildDocument",
   "type": "object"
 }

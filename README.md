@@ -107,7 +107,8 @@ protein-fasta cluster registry.sqlite3 clustering.csv
 
 The CLI also exposes aggregate diagnostics, theoretical digestion, checksums, database builds,
 registry indexing, database comparisons, materialized pair exports, and clustering. See the
-[CLI guide](docs/cli.md), [executable CLI walkthrough](docs/cli_walkthrough.md),
+[build workflows](docs/workflows.md), [CLI guide](docs/cli.md),
+[executable CLI walkthrough](docs/cli_walkthrough.md),
 [API reference](docs/api.md), and maintained
 [architecture](docs/architecture.md).
 

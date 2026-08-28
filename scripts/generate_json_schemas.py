@@ -6,13 +6,23 @@ from pathlib import Path
 from pydantic import BaseModel
 
 from protein_fasta.schema.analytics import DigestionDocument, EnzymeDocument
-from protein_fasta.schema.build import DatabaseBuildDocument
+from protein_fasta.schema.build import (
+    DatabaseBuildDocument,
+    DatabaseBuildProfileDocument,
+    DatabaseBuildRequestDocument,
+    DatabaseBuildResultDocument,
+    EffectiveDatabaseBuildDocument,
+)
 from protein_fasta.schema.diagnostics import DiagnosticDocument, EntryClassifierCatalogDocument
 from protein_fasta.schema.frame_formats import HeaderFormatDocument
 from protein_fasta.schema.registry import RegistryDiagnosticDocument, RegistryDocument
 
 _SCHEMAS: dict[str, type[BaseModel]] = {
     "database_build.schema.json": DatabaseBuildDocument,
+    "database_build_effective.schema.json": EffectiveDatabaseBuildDocument,
+    "database_build_profile.schema.json": DatabaseBuildProfileDocument,
+    "database_build_request.schema.json": DatabaseBuildRequestDocument,
+    "database_build_result.schema.json": DatabaseBuildResultDocument,
     "diagnostic.schema.json": DiagnosticDocument,
     "digestion.schema.json": DigestionDocument,
     "entry_classifier.schema.json": EntryClassifierCatalogDocument,

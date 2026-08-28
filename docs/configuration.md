@@ -13,7 +13,10 @@ schema-free scalar or Polars runtime values.
 | Header format | Recognition and extracted output columns for one database | `documents/frame_formats/<database>/rules.json` |
 | Enzyme | Cleavage expression and stable enzyme identity | `documents/enzymes/<enzyme>/rules.json` |
 | Digestion | Enzyme reference, length range, and missed cleavages | Explicit JSON or build document |
-| Database build | Inputs, naming, metadata, and generation policy | Explicit JSON |
+| Database build profile | Portable naming, metadata, diagnostics, and generation defaults | `documents/build_profiles/fgcz/profile.json` or explicit JSON |
+| Database build request | Per-run sources, identity, destination, and overrides | Explicit JSON |
+| Effective database build | Fully resolved replay input | Written beside every build |
+| Database build result | Artifacts, checksums, summaries, counts, normalization, and generation evidence | Written beside every build |
 | Registry | Backend and indexing/comparison policy | Explicit JSON |
 | Registry diagnostics | Operational FGCZ classifications and decoy prefix | `documents/registry/fgcz.json` |
 
@@ -84,19 +87,25 @@ frame = read_configured_protein_frame(
 )
 ```
 
-Committed JSON Schemas for diagnostics, classifiers, header formats, enzymes, digestion, database
-builds, registries, and registry diagnostics are packaged under
+Committed JSON Schemas for diagnostics, classifiers, header formats, enzymes, digestion,
+database-build profile/request/effective/result documents, registries, and registry diagnostics are packaged under
 `protein_fasta/documents/_schema/`. `make schemas` regenerates them deterministically. Loading names
 the invalid source and reports malformed JSON or model-validation errors before runtime
 compilation.
 
 ## Build configuration
 
-`DatabaseBuildDocument` separates repeatable file construction from analytics and persistence. It
-contains source paths, output directory, build date, naming fields, `NamingDocument`,
-`MetadataDocument`, named contaminant blocks, `DecoyDocument`, and optional
-`EntrapmentDocument`. It does not contain registry rows, hashes, pair metrics, clustering, catalog
-selection, or installation state.
+`DatabaseBuildProfileDocument` owns reusable defaults. `DatabaseBuildRequestDocument` owns
+per-run paths, date, naming identity, and explicit generation choices.
+`resolve_database_build()` applies packaged profile, explicit profile, request, and typed CLI
+precedence and returns an `EffectiveDatabaseBuildDocument` with resolved paths. An explicit
+`"decoy": null` disables a profile decoy default.
+
+The packaged FGCZ profile is ordinary JSON at
+`documents/build_profiles/fgcz/profile.json`; copy it when a project needs authored defaults.
+Pydantic field defaults remain a final schema fallback, not an invisible application settings
+file. The effective request and final `DatabaseBuildResultDocument` are written beside the FASTA.
+They do not contain registry rows, pair metrics, catalog selection, installation, or GUI state.
 
 The default metadata grammar constructs the first `aa|<dbname>|...` bookkeeping record with
 `CRAPCRAPCRAP` and contaminant section markers with `MRECRAPCRAPCRAP`. These are configuration,

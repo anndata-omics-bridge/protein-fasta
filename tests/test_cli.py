@@ -266,19 +266,19 @@ def test_index_accepts_json_registry_policy(tmp_path: Path) -> None:
     assert registry_path.is_file()
 
 
-def test_build_uses_one_json_request_and_writes_manifest(tmp_path: Path) -> None:
+def test_build_resolves_profile_request_and_writes_typed_result(tmp_path: Path) -> None:
     target = tmp_path / "target.fasta"
     target.write_text(">P1 one\nac d*\n")
     config = tmp_path / "build.json"
     config.write_text(
         json.dumps(
             {
-                "schema_version": "0.1",
+                "schema_version": "0.2",
                 "targets": ["target.fasta"],
                 "output_dir": "out",
                 "date": "2026-08-27",
                 "name_fields": {"project": 1, "dbn": 2, "description": "demo"},
-                "add_decoys": False,
+                "decoy": None,
             }
         )
     )
@@ -286,9 +286,13 @@ def test_build_uses_one_json_request_and_writes_manifest(tmp_path: Path) -> None
     build(config)
 
     fasta = tmp_path / "out" / "p1_db2_demo_20260827.fasta"
-    manifest = fasta.with_suffix(".fasta.manifest.json")
+    effective = fasta.with_suffix(".fasta.effective.json")
+    result = fasta.with_suffix(".fasta.result.json")
     assert fasta.read_text().endswith(">P1 one\nACD\n")
-    payload = json.loads(manifest.read_text())
+    effective_payload = json.loads(effective.read_text())
+    payload = json.loads(result.read_text())
+    assert effective_payload["decoy"] is None
+    assert effective_payload["targets"] == [str(target)]
     assert payload["counts"] == {
         "contaminant": 0,
         "decoy": 0,
@@ -296,4 +300,8 @@ def test_build_uses_one_json_request_and_writes_manifest(tmp_path: Path) -> None
         "target": 1,
         "total": 2,
     }
-    assert payload["output"]["checksum_version"] == "md5-file-v1"
+    fasta_artifact = next(
+        artifact for artifact in payload["artifacts"] if artifact["schema_name"] == "protein-fasta"
+    )
+    assert fasta_artifact["checksum_version"] == "md5-file-v1"
+    assert payload["summary"]["aa_counts"] == {"A": 4, "C": 4, "D": 1, "P": 3, "R": 3}

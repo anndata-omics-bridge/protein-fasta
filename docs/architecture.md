@@ -104,10 +104,10 @@ work. Root loading/compilation boundaries construct schema-free runtime values. 
 discriminator branches belong at those construction boundaries; downstream code invokes the
 selected behavior.
 
-The database-build JSON composes naming, metadata, diagnostic, decoy, entrapment, and input-path
-documents. Registry JSON contains backend and indexing policy while source and destination paths
-remain operation arguments. Header parsers remain one independently authored JSON file per source
-database.
+Database-build profile and request JSON are resolved once into a complete effective document.
+`run_database_build()` writes that document before computation and a typed result afterward.
+Registry JSON contains backend and indexing policy while source and destination paths remain
+operation arguments. Header parsers remain one independently authored JSON file per source database.
 
 ## Optional dependencies and consumers
 

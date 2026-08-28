@@ -9,7 +9,11 @@ from pathlib import Path
 from pydantic import BaseModel, ValidationError
 
 from protein_fasta.schema.analytics import DigestionDocument, EnzymeDocument
-from protein_fasta.schema.build import DatabaseBuildDocument
+from protein_fasta.schema.build import (
+    DatabaseBuildDocument,
+    DatabaseBuildProfileDocument,
+    DatabaseBuildRequestDocument,
+)
 from protein_fasta.schema.diagnostics import (
     DiagnosticDocument,
     EntryClassifierCatalogDocument,
@@ -67,6 +71,26 @@ def load_registry_document(path: Path, /) -> RegistryDocument:
 def load_database_build_document(path: Path, /) -> DatabaseBuildDocument:
     """Load one complete database-build request from an explicit JSON path."""
     return _load_path(path, DatabaseBuildDocument)
+
+
+def load_database_build_profile(path: Path, /) -> DatabaseBuildProfileDocument:
+    """Load one portable database-build profile from an explicit JSON path."""
+    return _load_path(path, DatabaseBuildProfileDocument)
+
+
+def load_database_build_request(path: Path, /) -> DatabaseBuildRequestDocument:
+    """Load one per-run database-build request from an explicit JSON path."""
+    return _load_path(path, DatabaseBuildRequestDocument)
+
+
+def load_builtin_database_build_profile(name: str = "fgcz", /) -> DatabaseBuildProfileDocument:
+    """Load one packaged database-build profile by stable name."""
+    resource = _PACKAGE_DOCUMENTS.joinpath("build_profiles", name, "profile.json")
+    try:
+        text = resource.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as error:
+        raise ValueError(f"cannot read packaged build profile {name!r}: {error}") from error
+    return _load_text(text, str(resource), DatabaseBuildProfileDocument)
 
 
 def load_builtin_enzyme_document(name: str = "trypsin", /) -> EnzymeDocument:

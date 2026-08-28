@@ -70,7 +70,36 @@ missed-cleavage count.
 
 ## Database construction
 
-`build_database()` is the reusable composition root. It accepts already-resolved target,
+The stable workflow API is `resolve_database_build()` followed by `run_database_build()`. The
+first call combines a `DatabaseBuildProfileDocument`, a `DatabaseBuildRequestDocument`, their
+base directories, and optional typed `DatabaseBuildOverrides`. The second consumes the complete
+`EffectiveDatabaseBuildDocument` and returns `DatabaseBuildExecution`.
+
+```python
+from pathlib import Path
+
+from protein_fasta.database_build import resolve_database_build, run_database_build
+from protein_fasta.documents import (
+    load_database_build_profile,
+    load_database_build_request,
+)
+
+profile_path = Path("fgcz.json")
+request_path = Path("request.json")
+effective = resolve_database_build(
+    load_database_build_profile(profile_path),
+    load_database_build_request(request_path),
+    profile_base=profile_path.parent,
+    request_base=request_path.parent,
+)
+execution = run_database_build(effective)
+```
+
+This is the API `fasta_gen` should call. It may construct the Pydantic documents in memory instead
+of loading JSON; the resolver and execution call stay identical. The returned execution contains
+the runtime `PipelineResult`, typed `DatabaseBuildResultDocument`, and both JSON paths.
+
+The internal low-level `build_database()` currently accepts already-resolved target,
 contaminant, and optional foreign-source entries plus:
 
 - `NamingDocument` for database and filename construction;
@@ -83,8 +112,9 @@ records, generates requested records, writes deterministic FASTA output, and ret
 `PipelineResult`. It does not resolve a contaminant catalog, install into a site collection, or
 update a registry; those are application workflows.
 
-For a complete reproducible request, validate `DatabaseBuildDocument` with
-`load_database_build_document(path)` or use the `build` CLI command.
+New callers should not assemble that low-level parameter list. Use the workflow API or the
+equivalent `build` CLI command. See [Build workflows](workflows.md) for precedence, artifacts,
+decoy ownership, and the portrait workflow diagrams.
 
 ## Registry
 

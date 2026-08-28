@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import datetime
+import inspect
 from pathlib import Path
 
 import pytest
@@ -13,11 +14,13 @@ from protein_fasta.database_build import (
     Entry,
     PipelineResult,
     build_database,
+    run_database_build,
 )
 from protein_fasta.reading.header import parse_header
-from protein_fasta.reading.parser import read_records
+from protein_fasta.reading.parser import FastaReadError, read_records
 from protein_fasta.registry.rules import load_registry_diagnostics
 from protein_fasta.schema.build import (
+    EffectiveDatabaseBuildDocument,
     EntrapmentDocument,
     EntrapmentStrategy,
     MetadataDocument,
@@ -41,8 +44,34 @@ def _build(
         date=datetime.date(2026, 8, 27),
         template="derived",
         contaminant_blocks=contaminant_blocks,
-        add_decoys=False,
+        decoy_spec=None,
     )
+
+
+def test_build_owns_optional_decoys_without_a_boolean_switch() -> None:
+    parameters = inspect.signature(build_database).parameters
+
+    assert "add_decoys" not in parameters
+    assert parameters["decoy_spec"].default is not None
+
+
+def test_effective_request_is_written_before_source_reading(tmp_path: Path) -> None:
+    effective = EffectiveDatabaseBuildDocument(
+        targets=(tmp_path / "missing.fasta",),
+        output_dir=tmp_path / "out",
+        date=datetime.date(2026, 8, 28),
+        name_fields={"description": "failed"},
+        template="derived",
+        naming=NamingDocument(default_dbname="derived"),
+        metadata=MetadataDocument(),
+        decoy=None,
+    )
+
+    with pytest.raises(FastaReadError, match=r"missing\.fasta"):
+        run_database_build(effective)
+
+    effective_path = tmp_path / "out" / "failed_20260828.fasta.effective.json"
+    assert effective_path.is_file()
 
 
 def test_build_writes_metadata_targets_and_contaminant_markers(tmp_path: Path) -> None:
@@ -89,7 +118,6 @@ def test_entrapment_joins_the_biological_space_before_decoys(tmp_path: Path) -> 
         output_dir=tmp_path,
         date=datetime.date(2026, 8, 27),
         template="derived",
-        add_decoys=True,
         entrapment_spec=EntrapmentDocument(fold=1, seed=7),
     )
 
@@ -109,8 +137,9 @@ def test_entrapment_joins_the_biological_space_before_decoys(tmp_path: Path) -> 
     )
     assert result.entrapment_pairs_path is not None
     assert result.entrapment_pairs_path.is_file()
-    assert result.entrapment_strategy == EntrapmentStrategy.SHUFFLED
-    assert result.entrapment_requested_fold == result.entrapment_achieved_fold == 1
+    assert result.entrapment is not None
+    assert result.entrapment.strategy == EntrapmentStrategy.SHUFFLED
+    assert result.entrapment.requested_fold == result.entrapment.achieved_fold == 1
 
 
 def test_foreign_species_entrapment_does_not_claim_peptide_pairs(tmp_path: Path) -> None:
@@ -123,7 +152,7 @@ def test_foreign_species_entrapment_does_not_claim_peptide_pairs(tmp_path: Path)
         output_dir=tmp_path,
         date=datetime.date(2026, 8, 27),
         template="derived",
-        add_decoys=False,
+        decoy_spec=None,
         entrapment_spec=EntrapmentDocument(
             strategy=EntrapmentStrategy.FOREIGN_SPECIES,
             fold=1,

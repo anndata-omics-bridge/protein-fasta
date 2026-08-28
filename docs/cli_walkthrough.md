@@ -132,8 +132,8 @@ protein-fasta table "$WORK/mixed.fasta" "$WORK/checksums.csv" \
 
 ## Build a database
 
-The request contains all build inputs, naming values, metadata policy, and generation policy. The
-command writes both the FASTA and its reproducibility manifest.
+The request contains the per-run inputs and naming values; the packaged FGCZ profile supplies
+portable defaults. The command writes the FASTA, effective request JSON, and typed result JSON.
 
 {{ cli('protein-fasta build "$WORK/build.json"') }}
 

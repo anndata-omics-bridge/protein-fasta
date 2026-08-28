@@ -1,32 +1,5 @@
 {
   "$defs": {
-    "ContaminantBlockDocument": {
-      "additionalProperties": false,
-      "description": "One named FASTA source inserted as a marked contaminant block.",
-      "properties": {
-        "description": {
-          "default": "",
-          "title": "Description",
-          "type": "string"
-        },
-        "name": {
-          "minLength": 1,
-          "title": "Name",
-          "type": "string"
-        },
-        "path": {
-          "format": "path",
-          "title": "Path",
-          "type": "string"
-        }
-      },
-      "required": [
-        "name",
-        "path"
-      ],
-      "title": "ContaminantBlockDocument",
-      "type": "object"
-    },
     "DecoyDocument": {
       "additionalProperties": false,
       "description": "Validated decoy mode, stochastic seed, and collision digestion.",
@@ -278,27 +251,9 @@
     }
   },
   "additionalProperties": false,
-  "description": "Complete reproducible request for one protein database build.",
+  "description": "Portable defaults shared by a family of protein database builds.",
   "properties": {
-    "annotation": {
-      "default": "",
-      "title": "Annotation",
-      "type": "string"
-    },
-    "contaminant_blocks": {
-      "default": [],
-      "items": {
-        "$ref": "#/$defs/ContaminantBlockDocument"
-      },
-      "title": "Contaminant Blocks",
-      "type": "array"
-    },
-    "date": {
-      "format": "date",
-      "title": "Date",
-      "type": "string"
-    },
-    "decoy": {
+    "default_decoy": {
       "anyOf": [
         {
           "$ref": "#/$defs/DecoyDocument"
@@ -307,6 +262,17 @@
           "type": "null"
         }
       ]
+    },
+    "default_entrapment": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/EntrapmentDocument"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
     },
     "diagnostics": {
       "anyOf": [
@@ -321,97 +287,19 @@
       "default": null,
       "title": "Diagnostics"
     },
-    "entrapment": {
-      "anyOf": [
-        {
-          "$ref": "#/$defs/EntrapmentDocument"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null
-    },
-    "foreign_sources": {
-      "default": [],
-      "items": {
-        "format": "path",
-        "type": "string"
-      },
-      "title": "Foreign Sources",
-      "type": "array"
-    },
-    "installer": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "title": "Installer"
-    },
     "metadata": {
       "$ref": "#/$defs/MetadataDocument"
-    },
-    "name_fields": {
-      "additionalProperties": {
-        "anyOf": [
-          {
-            "type": "string"
-          },
-          {
-            "type": "integer"
-          }
-        ]
-      },
-      "title": "Name Fields",
-      "type": "object"
     },
     "naming": {
       "$ref": "#/$defs/NamingDocument"
     },
-    "output_dir": {
-      "format": "path",
-      "title": "Output Dir",
-      "type": "string"
-    },
     "schema_version": {
-      "const": "0.1",
-      "default": "0.1",
+      "const": "0.2",
+      "default": "0.2",
       "title": "Schema Version",
       "type": "string"
-    },
-    "targets": {
-      "items": {
-        "format": "path",
-        "type": "string"
-      },
-      "minItems": 1,
-      "title": "Targets",
-      "type": "array"
-    },
-    "template": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "title": "Template"
     }
   },
-  "required": [
-    "targets",
-    "output_dir",
-    "date",
-    "name_fields"
-  ],
-  "title": "DatabaseBuildDocument",
+  "title": "DatabaseBuildProfileDocument",
   "type": "object"
 }

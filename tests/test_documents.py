@@ -9,12 +9,19 @@ import pytest
 from pydantic import BaseModel, ValidationError
 
 from protein_fasta.documents import (
+    load_builtin_database_build_profile,
     load_builtin_diagnostic_document,
     load_builtin_entry_classifier_document,
     load_diagnostic_document,
 )
 from protein_fasta.schema.analytics import DigestionDocument, EnzymeDocument
-from protein_fasta.schema.build import DatabaseBuildDocument
+from protein_fasta.schema.build import (
+    DatabaseBuildDocument,
+    DatabaseBuildProfileDocument,
+    DatabaseBuildRequestDocument,
+    DatabaseBuildResultDocument,
+    EffectiveDatabaseBuildDocument,
+)
 from protein_fasta.schema.diagnostics import (
     DiagnosticDocument,
     EntryClassifierCatalogDocument,
@@ -25,6 +32,9 @@ from protein_fasta.schema.registry import RegistryDiagnosticDocument, RegistryDo
 
 
 def test_builtin_documents_load_with_stable_versions() -> None:
+    profile = load_builtin_database_build_profile()
+    assert profile.schema_version == "0.2"
+    assert profile.metadata.tool == "protein-fasta"
     assert load_builtin_diagnostic_document().file_version == "1"
     assert load_builtin_entry_classifier_document().file_version == "2"
 
@@ -65,6 +75,10 @@ def test_classifier_requires_at_least_one_pattern() -> None:
     ("name", "model"),
     [
         ("database_build.schema.json", DatabaseBuildDocument),
+        ("database_build_effective.schema.json", EffectiveDatabaseBuildDocument),
+        ("database_build_profile.schema.json", DatabaseBuildProfileDocument),
+        ("database_build_request.schema.json", DatabaseBuildRequestDocument),
+        ("database_build_result.schema.json", DatabaseBuildResultDocument),
         ("diagnostic.schema.json", DiagnosticDocument),
         ("digestion.schema.json", DigestionDocument),
         ("entry_classifier.schema.json", EntryClassifierCatalogDocument),

@@ -63,7 +63,7 @@ build:  ## Build, validate, and smoke-test source and wheel distributions
 		tests/test_cli.py::test_digest_writes_peptides_with_missed_cleavage_evidence \
 		tests/test_cli.py::test_registry_cli_functions_cover_index_compare_pairs_and_cluster \
 		tests/test_cli.py::test_index_accepts_json_registry_policy \
-		tests/test_cli.py::test_build_uses_one_json_request_and_writes_manifest
+		tests/test_cli.py::test_build_resolves_profile_request_and_writes_typed_result
 
 docs:  ## Build documentation with strict warnings
 	uv run --frozen --group docs zensical build --clean --strict

@@ -30,7 +30,8 @@ import json
 import os
 import tempfile
 from collections.abc import Iterable
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, replace
+from enum import StrEnum
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -41,18 +42,28 @@ from protein_fasta.build.generation.decoy import (
     DEFAULT_DECOY_SPEC,
     make_decoy_generation,
 )
-from protein_fasta.build.generation.decoy_types import DecoyBatch
+from protein_fasta.build.generation.decoy_types import DecoyBatch, DecoyGeneration
 from protein_fasta.build.metadata import build_section_marker_header, build_sentinel_header
 from protein_fasta.build.naming import build_dbname, build_fasta_name
 from protein_fasta.diagnostics.messages import describe_illegal_residues
 from protein_fasta.diagnostics.runtime import DiagnosticRules
 from protein_fasta.reading.header import parse_header
 from protein_fasta.reading.parser import FastaRecord
-from protein_fasta.registry.rules import RegistryDiagnosticRules
+from protein_fasta.registry.rules import RegistryDiagnosticRules, load_registry_diagnostics
 from protein_fasta.schema.build import (
+    BuildArtifactDocument,
+    DatabaseBuildCountsDocument,
+    DatabaseBuildDecoyEvidenceDocument,
     DatabaseBuildDocument,
+    DatabaseBuildEntrapmentEvidenceDocument,
+    DatabaseBuildNormalizationDocument,
+    DatabaseBuildProfileDocument,
+    DatabaseBuildRequestDocument,
+    DatabaseBuildResultDocument,
+    DatabaseBuildSummaryDocument,
     DecoyDocument,
     DecoyMode,
+    EffectiveDatabaseBuildDocument,
     EntrapmentDocument,
     MetadataDocument,
     NamingDocument,
@@ -106,6 +117,32 @@ class ContaminantBlock:
 
 
 @dataclass(frozen=True)
+class DecoyBuildEvidence:
+    """Decoy algorithm identity, parameters, and collision outcomes."""
+
+    mode: str
+    seed: int | None
+    parameters: dict[str, Any]
+    initial_collisions: int
+    unresolved_collisions: int
+    dropped_peptides: int
+    omitted_decoys: int
+
+
+@dataclass(frozen=True)
+class EntrapmentBuildEvidence:
+    """Entrapment algorithm identity and achieved multiplicity."""
+
+    strategy: str
+    seed: int
+    requested_fold: int
+    achieved_fold: int
+    failures: int
+    proteins_affected: int
+    source_proteins: int
+
+
+@dataclass(frozen=True)
 class PipelineResult:
     """Outcome of a database build."""
 
@@ -117,27 +154,367 @@ class PipelineResult:
     n_total: int
     contaminant_sets: list[str]
     summary: FastaSummary
-    decoy_mode: str = DecoyMode.REVERSE.value
-    decoy_seed: int | None = None
-    decoy_parameters: dict[str, Any] = field(default_factory=dict[str, Any])
-    decoy_initial_collisions: int = 0
-    decoy_unresolved_collisions: int = 0
-    decoy_dropped_peptides: int = 0
-    decoy_omitted: int = 0
+    decoy: DecoyBuildEvidence | None = None
     n_entrapment: int = 0
-    entrapment_strategy: str | None = None
-    entrapment_seed: int | None = None
-    entrapment_requested_fold: int = 0
-    entrapment_achieved_fold: int = 0
-    entrapment_failures: int = 0
-    entrapment_proteins_affected: int = 0
-    entrapment_source_proteins: int = 0
+    entrapment: EntrapmentBuildEvidence | None = None
     entrapment_pairs_path: Path | None = None
     # What normalization and deduplication changed on the way in, so a produced
     # file can account for the difference from its sources.
     upper_cased_entries: int = 0
     stop_stripped_entries: int = 0
     duplicates_dropped: int = 0
+
+
+class BuildDecoyOverride(StrEnum):
+    """Typed CLI/API override for the configured decoy stage."""
+
+    NONE = "none"
+    REVERSE = DecoyMode.REVERSE.value
+    SHUFFLE = DecoyMode.SHUFFLE.value
+    DECOYPYRAT = DecoyMode.DECOYPYRAT.value
+
+
+@dataclass(frozen=True, slots=True)
+class DatabaseBuildOverrides:
+    """Common explicitly supplied values that take precedence over JSON."""
+
+    date: datetime.date | None = None
+    decoy: BuildDecoyOverride | None = None
+
+
+DEFAULT_BUILD_OVERRIDES = DatabaseBuildOverrides()
+
+
+@dataclass(frozen=True, slots=True)
+class DatabaseBuildExecution:
+    """Runtime result and its durable JSON evidence paths."""
+
+    result: PipelineResult
+    document: DatabaseBuildResultDocument
+    effective_request_path: Path
+    result_path: Path
+
+
+def _decoy_build_evidence(
+    generation: DecoyGeneration | None,
+    batch: DecoyBatch,
+) -> DecoyBuildEvidence | None:
+    if generation is None:
+        return None
+    return DecoyBuildEvidence(
+        mode=generation.mode.value,
+        seed=generation.seed,
+        parameters=batch.parameters,
+        initial_collisions=batch.initial_collisions,
+        unresolved_collisions=batch.unresolved_collisions,
+        dropped_peptides=batch.dropped_peptides,
+        omitted_decoys=batch.omitted_decoys,
+    )
+
+
+def _entrapment_build_evidence(
+    generation: EntrapmentGeneration | None,
+    batch: EntrapmentBatch | None,
+) -> EntrapmentBuildEvidence | None:
+    if generation is None or batch is None:
+        return None
+    return EntrapmentBuildEvidence(
+        strategy=generation.strategy.value,
+        seed=generation.seed,
+        requested_fold=batch.requested_fold,
+        achieved_fold=batch.achieved_fold,
+        failures=batch.failures,
+        proteins_affected=batch.proteins_affected,
+        source_proteins=batch.source_proteins,
+    )
+
+
+def resolve_database_build(
+    profile: DatabaseBuildProfileDocument,
+    request: DatabaseBuildRequestDocument,
+    *,
+    profile_base: Path,
+    request_base: Path,
+    overrides: DatabaseBuildOverrides = DEFAULT_BUILD_OVERRIDES,
+) -> EffectiveDatabaseBuildDocument:
+    """Resolve profile, request, and explicit overrides into replayable paths."""
+    naming = request.naming or profile.naming
+    metadata = request.metadata or profile.metadata
+    diagnostics = _resolved_profile_or_request_path(
+        profile.diagnostics,
+        request.diagnostics,
+        request_field_is_set="diagnostics" in request.model_fields_set,
+        profile_base=profile_base,
+        request_base=request_base,
+    )
+    decoy = _resolved_decoy(profile, request, overrides.decoy)
+    entrapment = (
+        request.entrapment
+        if "entrapment" in request.model_fields_set
+        else profile.default_entrapment
+    )
+    return EffectiveDatabaseBuildDocument(
+        targets=tuple(_resolved_path(path, request_base) for path in request.targets),
+        output_dir=_resolved_path(request.output_dir, request_base),
+        date=overrides.date or request.date,
+        name_fields=request.name_fields,
+        template=request.template or naming.default_dbname,
+        naming=naming,
+        metadata=metadata,
+        diagnostics=diagnostics,
+        contaminant_blocks=tuple(
+            block.model_copy(update={"path": _resolved_path(block.path, request_base)})
+            for block in request.contaminant_blocks
+        ),
+        decoy=decoy,
+        entrapment=entrapment,
+        foreign_sources=tuple(
+            _resolved_path(path, request_base) for path in request.foreign_sources
+        ),
+        annotation=request.annotation,
+        installer=request.installer,
+    )
+
+
+def run_database_build(effective: EffectiveDatabaseBuildDocument) -> DatabaseBuildExecution:
+    """Read one effective request, build its FASTA, and persist typed evidence."""
+    effective.output_dir.mkdir(parents=True, exist_ok=True)
+    expected_name = build_fasta_name(
+        config=effective.naming,
+        template=effective.template,
+        date=effective.date,
+        decoy=effective.decoy is not None,
+        entrapment=effective.entrapment is not None,
+        **effective.name_fields,
+    )
+    expected_path = effective.output_dir / expected_name
+    effective_path = expected_path.with_suffix(f"{expected_path.suffix}.effective.json")
+    _write_json_atomic(effective_path, effective.model_dump(mode="json"))
+
+    target_entries = _entries_from_paths(effective.targets)
+    foreign_entries = _entries_from_paths(effective.foreign_sources)
+    blocks = tuple(
+        ContaminantBlock(
+            name=block.name,
+            description=block.description,
+            entries=tuple(_entries_from_paths((block.path,))),
+        )
+        for block in effective.contaminant_blocks
+    )
+
+    result = build_database(
+        targets=target_entries,
+        name_fields=effective.name_fields,
+        naming=effective.naming,
+        metadata=effective.metadata,
+        diagnostics=load_registry_diagnostics(effective.diagnostics),
+        output_dir=effective.output_dir,
+        date=effective.date,
+        template=effective.template,
+        contaminant_blocks=blocks,
+        decoy_spec=effective.decoy,
+        entrapment_spec=effective.entrapment,
+        foreign_entries=foreign_entries,
+        annotation=effective.annotation,
+        installer=effective.installer,
+    )
+    input_paths = (
+        *effective.targets,
+        *(block.path for block in effective.contaminant_blocks),
+        *effective.foreign_sources,
+    )
+    result_document = _result_document(effective, result, effective_path, input_paths)
+    result_path = result.path.with_suffix(f"{result.path.suffix}.result.json")
+    _write_json_atomic(result_path, result_document.model_dump(mode="json"))
+    return DatabaseBuildExecution(result, result_document, effective_path, result_path)
+
+
+def _resolved_path(path: Path, base: Path) -> Path:
+    return path.resolve() if path.is_absolute() else (base / path).resolve()
+
+
+def _resolved_profile_or_request_path(
+    profile_path: Path | None,
+    request_path: Path | None,
+    *,
+    request_field_is_set: bool,
+    profile_base: Path,
+    request_base: Path,
+) -> Path | None:
+    if request_field_is_set:
+        return None if request_path is None else _resolved_path(request_path, request_base)
+    return None if profile_path is None else _resolved_path(profile_path, profile_base)
+
+
+def _resolved_decoy(
+    profile: DatabaseBuildProfileDocument,
+    request: DatabaseBuildRequestDocument,
+    override: BuildDecoyOverride | None,
+) -> DecoyDocument | None:
+    configured = request.decoy if "decoy" in request.model_fields_set else profile.default_decoy
+    if override is None:
+        return configured
+    if override is BuildDecoyOverride.NONE:
+        return None
+    base = configured or DecoyDocument()
+    return base.model_copy(update={"mode": DecoyMode(override.value)})
+
+
+def _entries_from_paths(paths: tuple[Path, ...]) -> list[Entry]:
+    return [
+        (record.raw_header, record.sequence)
+        for path in paths
+        for record in _read_existing_records(path)
+    ]
+
+
+def _read_existing_records(path: Path) -> Iterable[FastaRecord]:
+    from protein_fasta.reading.parser import read_records
+
+    try:
+        return read_records(path)
+    except OSError as error:
+        raise ValueError(f"cannot read database-build source {path}: {error}") from error
+
+
+def _artifact(
+    path: Path,
+    *,
+    relative_to: Path,
+    schema_name: str,
+    schema_version: str,
+    row_count: int | None = None,
+) -> BuildArtifactDocument:
+    return BuildArtifactDocument(
+        schema_name=schema_name,
+        schema_version=schema_version,
+        path=Path(os.path.relpath(path, start=relative_to)),
+        checksum_version=FILE_CHECKSUM_VERSION,
+        checksum=file_checksum(path),
+        byte_count=path.stat().st_size,
+        row_count=row_count,
+    )
+
+
+def _result_document(
+    effective: EffectiveDatabaseBuildDocument,
+    result: PipelineResult,
+    effective_path: Path,
+    input_paths: tuple[Path, ...],
+) -> DatabaseBuildResultDocument:
+    summary = result.summary
+    frequencies = (
+        {
+            residue: count / summary.total_residues
+            for residue, count in summary.aa_frequencies.items()
+        }
+        if summary.total_residues
+        else {}
+    )
+    artifacts = [
+        _artifact(
+            effective_path,
+            relative_to=effective.output_dir,
+            schema_name="effective-database-build",
+            schema_version=effective.schema_version,
+        ),
+        *(
+            _artifact(
+                path,
+                relative_to=effective.output_dir,
+                schema_name="protein-fasta-input",
+                schema_version="1",
+            )
+            for path in input_paths
+        ),
+        _artifact(
+            result.path,
+            relative_to=effective.output_dir,
+            schema_name="protein-fasta",
+            schema_version="1",
+            row_count=result.n_total,
+        ),
+    ]
+    if result.entrapment_pairs_path is not None:
+        artifacts.append(
+            _artifact(
+                result.entrapment_pairs_path,
+                relative_to=effective.output_dir,
+                schema_name="entrapment-pairs-tsv",
+                schema_version="legacy-1",
+            )
+        )
+    decoy = None
+    if result.decoy is not None:
+        decoy = DatabaseBuildDecoyEvidenceDocument(
+            mode=result.decoy.mode,
+            seed=result.decoy.seed,
+            initial_collisions=result.decoy.initial_collisions,
+            unresolved_collisions=result.decoy.unresolved_collisions,
+            dropped_peptides=result.decoy.dropped_peptides,
+            omitted_decoys=result.decoy.omitted_decoys,
+        )
+    entrapment = None
+    if result.entrapment is not None:
+        entrapment = DatabaseBuildEntrapmentEvidenceDocument(
+            strategy=result.entrapment.strategy,
+            seed=result.entrapment.seed,
+            requested_fold=result.entrapment.requested_fold,
+            achieved_fold=result.entrapment.achieved_fold,
+            failures=result.entrapment.failures,
+            proteins_affected=result.entrapment.proteins_affected,
+            source_proteins=result.entrapment.source_proteins,
+        )
+    return DatabaseBuildResultDocument(
+        protein_fasta_version=importlib.metadata.version("protein_fasta"),
+        effective_request=effective,
+        artifacts=tuple(artifacts),
+        counts=DatabaseBuildCountsDocument(
+            target=result.n_target,
+            contaminant=result.n_contaminant,
+            entrapment=result.n_entrapment,
+            decoy=result.n_decoy,
+            total=result.n_total,
+        ),
+        normalization=DatabaseBuildNormalizationDocument(
+            upper_cased=result.upper_cased_entries,
+            terminal_stops_stripped=result.stop_stripped_entries,
+            duplicates_dropped=result.duplicates_dropped,
+        ),
+        summary=DatabaseBuildSummaryDocument(
+            n_sequences=summary.n_sequences,
+            length_min=summary.length_min,
+            length_max=summary.length_max,
+            length_mean=summary.length_mean,
+            length_q1=summary.length_q1,
+            length_median=summary.length_median,
+            length_q3=summary.length_q3,
+            total_residues=summary.total_residues,
+            aa_counts=summary.aa_frequencies,
+            aa_frequencies=frequencies,
+        ),
+        decoy=decoy,
+        entrapment=entrapment,
+    )
+
+
+def _write_json_atomic(path: Path, payload: object) -> None:
+    descriptor, temporary_name = tempfile.mkstemp(
+        prefix=f".{path.name}.",
+        suffix=".tmp",
+        dir=path.parent,
+    )
+    os.close(descriptor)
+    temporary_path = Path(temporary_name)
+    try:
+        temporary_path.write_text(
+            json.dumps(payload, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        os.replace(temporary_path, path)
+    except BaseException:
+        temporary_path.unlink(missing_ok=True)
+        raise
 
 
 def _normalize_entries(
@@ -236,8 +613,7 @@ def build_database(
     date: datetime.date,
     template: str | None = None,
     contaminant_blocks: Iterable[ContaminantBlock] = (),
-    add_decoys: bool = True,
-    decoy_spec: DecoyDocument = DEFAULT_DECOY_SPEC,
+    decoy_spec: DecoyDocument | None = DEFAULT_DECOY_SPEC,
     entrapment_spec: EntrapmentDocument | None = None,
     foreign_entries: Iterable[Entry] = (),
     annotation: str = "",
@@ -250,7 +626,7 @@ def build_database(
     consumed once; pass a list if you need to reuse it.
     """
     resolved_blocks = list(contaminant_blocks)
-    decoy_generation = make_decoy_generation(decoy_spec)
+    decoy_generation = None if decoy_spec is None else make_decoy_generation(decoy_spec)
     entrapment_generation: EntrapmentGeneration | None = (
         None if entrapment_spec is None else _make_entrapment_generation(entrapment_spec)
     )
@@ -262,7 +638,7 @@ def build_database(
         config=naming,
         template=template,
         date=date,
-        decoy=add_decoys,
+        decoy=decoy_generation is not None,
         entrapment=entrapment_spec is not None,
         **name_fields,
     )
@@ -320,13 +696,16 @@ def build_database(
     decoy_source, _, _ = _deduplicate_by_id(
         [target_list, contaminant_entries, list(entrapment_entries)]
     )
-    decoy_batch = DecoyBatch((), decoy_generation.parameters())
-    if add_decoys:
+    decoy_batch = DecoyBatch(
+        (),
+        {} if decoy_generation is None else decoy_generation.parameters(),
+    )
+    if decoy_generation is not None:
         prefix = diagnostics.decoy_prefix
         decoy_batch = decoy_generation.generate(tuple(decoy_source), prefix=prefix)
     decoys = decoy_batch.entries
 
-    if add_decoys:
+    if decoy_generation is not None:
         decoy_note = decoy_generation.annotation(
             initial_collisions=decoy_batch.initial_collisions,
             dropped_peptides=decoy_batch.dropped_peptides,
@@ -395,6 +774,8 @@ def build_database(
         n_decoy,
         len(final),
     )
+    decoy_evidence = _decoy_build_evidence(decoy_generation, decoy_batch)
+    entrapment_evidence = _entrapment_build_evidence(entrapment_generation, entrapment_batch)
     return PipelineResult(
         path=out_path,
         dbname=dbname,
@@ -404,31 +785,9 @@ def build_database(
         n_total=len(final),
         contaminant_sets=[block.name for block in resolved_blocks],
         summary=summary,
-        decoy_mode=decoy_generation.mode.value if add_decoys else "none",
-        decoy_seed=decoy_generation.seed if add_decoys else None,
-        decoy_parameters=decoy_batch.parameters,
-        decoy_initial_collisions=decoy_batch.initial_collisions,
-        decoy_unresolved_collisions=decoy_batch.unresolved_collisions,
-        decoy_dropped_peptides=decoy_batch.dropped_peptides,
-        decoy_omitted=decoy_batch.omitted_decoys,
+        decoy=decoy_evidence,
         n_entrapment=n_entrapment,
-        entrapment_strategy=(
-            entrapment_generation.strategy.value if entrapment_generation is not None else None
-        ),
-        entrapment_seed=(entrapment_generation.seed if entrapment_generation is not None else None),
-        entrapment_requested_fold=entrapment_batch.requested_fold
-        if entrapment_batch is not None
-        else 0,
-        entrapment_achieved_fold=entrapment_batch.achieved_fold
-        if entrapment_batch is not None
-        else 0,
-        entrapment_failures=entrapment_batch.failures if entrapment_batch is not None else 0,
-        entrapment_proteins_affected=(
-            entrapment_batch.proteins_affected if entrapment_batch is not None else 0
-        ),
-        entrapment_source_proteins=(
-            entrapment_batch.source_proteins if entrapment_batch is not None else 0
-        ),
+        entrapment=entrapment_evidence,
         entrapment_pairs_path=pairs_path,
         upper_cased_entries=upper_cased,
         stop_stripped_entries=stop_stripped,
@@ -471,13 +830,15 @@ def build_manifest(
             "terminal_stops_stripped": result.stop_stripped_entries,
             "duplicates_dropped": result.duplicates_dropped,
         },
-        "decoy": result.decoy_parameters,
-        "entrapment": {
-            "strategy": result.entrapment_strategy,
-            "seed": result.entrapment_seed,
-            "requested_fold": result.entrapment_requested_fold,
-            "achieved_fold": result.entrapment_achieved_fold,
-            "failures": result.entrapment_failures,
+        "decoy": {} if result.decoy is None else result.decoy.parameters,
+        "entrapment": None
+        if result.entrapment is None
+        else {
+            "strategy": result.entrapment.strategy,
+            "seed": result.entrapment.seed,
+            "requested_fold": result.entrapment.requested_fold,
+            "achieved_fold": result.entrapment.achieved_fold,
+            "failures": result.entrapment.failures,
         },
     }
 

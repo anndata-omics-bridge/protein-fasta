@@ -66,7 +66,6 @@ def test_cli_composes_only_authorized_package_components() -> None:
         "diagnostic_summary",
         "documents",
         "frame",
-        "reading",
         "record",
         "registry",
         "schema",
