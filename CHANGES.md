@@ -6,8 +6,10 @@
   after completion. The result records relative checksummed artifacts, complete length/amino-acid
   summaries, reconciled counts, normalization, and generation evidence. `protein-fasta build`
   owns the optional decoy stage directly; the low-level `add_decoys` boolean was removed in favor
-  of an absent or present decoy specification. Added portrait workflow and class diagrams before
-  the implementation documentation.
+  of an absent or present decoy specification. Every workflow build also writes a final-order
+  protein inventory Parquet with raw headers, normalized fields, operational kinds, contaminant
+  blocks, sequence hashes, and generation labels. Added portrait workflow and class diagrams
+  before the implementation documentation.
 
 - 2026-08-28: Corrected the recursive `build/` ignore rule that excluded the database-build
   implementation and its tests from Git. Moved the tests to the discoverable `tests/database_build/`

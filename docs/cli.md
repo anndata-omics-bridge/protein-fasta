@@ -53,8 +53,9 @@ protein-fasta build request.json \
 The request JSON owns per-run facts; an optional profile JSON owns reusable defaults. Relative
 request paths resolve beside the request file. Precedence is packaged FGCZ profile, explicit
 profile, request, then CLI options that were actually supplied. The command writes the effective
-request before sequence work and a `.fasta.result.json` afterward with typed artifacts, package
-version, checksums, counts, summaries, normalization changes, and generation evidence.
+request before sequence work, a final-order `.fasta.protein-inventory.parquet`, and a
+`.fasta.result.json` afterward with typed artifacts, package version, checksums, counts, summaries,
+normalization changes, and generation evidence.
 
 A minimal request is:
 

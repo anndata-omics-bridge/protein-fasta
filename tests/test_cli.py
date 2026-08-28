@@ -288,6 +288,7 @@ def test_build_resolves_profile_request_and_writes_typed_result(tmp_path: Path) 
     fasta = tmp_path / "out" / "p1_db2_demo_20260827.fasta"
     effective = fasta.with_suffix(".fasta.effective.json")
     result = fasta.with_suffix(".fasta.result.json")
+    inventory = fasta.with_suffix(".fasta.protein-inventory.parquet")
     assert fasta.read_text().endswith(">P1 one\nACD\n")
     effective_payload = json.loads(effective.read_text())
     payload = json.loads(result.read_text())
@@ -304,4 +305,24 @@ def test_build_resolves_profile_request_and_writes_typed_result(tmp_path: Path) 
         artifact for artifact in payload["artifacts"] if artifact["schema_name"] == "protein-fasta"
     )
     assert fasta_artifact["checksum_version"] == "md5-file-v1"
+    inventory_frame = pl.read_parquet(inventory)
+    assert inventory_frame.columns == [
+        "final_order",
+        "raw_header",
+        "id",
+        "description",
+        "sequence",
+        "kind",
+        "contaminant_group",
+        "sequence_hash",
+        "decoy_mode",
+        "entrapment_strategy",
+    ]
+    assert inventory_frame["kind"].to_list() == ["sentinel", "target"]
+    inventory_artifact = next(
+        artifact
+        for artifact in payload["artifacts"]
+        if artifact["schema_name"] == "protein-inventory"
+    )
+    assert inventory_artifact["row_count"] == 2
     assert payload["summary"]["aa_counts"] == {"A": 4, "C": 4, "D": 1, "P": 3, "R": 3}

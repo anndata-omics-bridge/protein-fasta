@@ -26,7 +26,7 @@ flowchart TB
     end
     B --> D
     C --> D
-    W --> F["protein FASTA<br/>effective JSON<br/>result JSON"]
+    W --> F["protein FASTA<br/>protein inventory Parquet<br/>effective + result JSON"]
     F --> H(["candidate comparison"])
     I[("existing SQLite/<br/>DuckDB registry")] --> H
     H --> J{"user/application accepts build?"}
@@ -67,7 +67,7 @@ flowchart TB
         N -->|no| W
     end
     C --> D
-    W --> H["protein FASTA<br/>effective JSON<br/>result JSON"]
+    W --> H["protein FASTA<br/>protein inventory Parquet<br/>effective + result JSON"]
     C --> I["entrapment pairs"]
     H --> J(["optional peptide build"])
     I --> J
@@ -119,9 +119,10 @@ protein-fasta build "$WORK/request.json" \
 head -n 3 "$WORK/out/p42261_db1_human_d_20260828.fasta"
 ```
 
-The command writes three primary files beside one another:
+The command writes four primary files beside one another:
 
 - the protein FASTA;
+- `*.fasta.protein-inventory.parquet`, containing the final ordered records and operational kinds;
 - `*.fasta.effective.json`, written before sequence computation; and
 - `*.fasta.result.json`, containing the effective request, checksummed artifacts, counts,
   normalization, sequence and amino-acid summaries, and decoy/entrapment evidence.

@@ -37,7 +37,7 @@ from typing import TYPE_CHECKING, Any
 
 from loguru import logger
 
-from protein_fasta.analytics.hashing import FILE_CHECKSUM_VERSION, file_checksum
+from protein_fasta.analytics.hashing import FILE_CHECKSUM_VERSION, file_checksum, sequence_hash
 from protein_fasta.build.generation.decoy import (
     DEFAULT_DECOY_SPEC,
     make_decoy_generation,
@@ -49,6 +49,8 @@ from protein_fasta.diagnostics.messages import describe_illegal_residues
 from protein_fasta.diagnostics.runtime import DiagnosticRules
 from protein_fasta.reading.header import parse_header
 from protein_fasta.reading.parser import FastaRecord
+from protein_fasta.registry.classification import ContaminantBlockState, classify_record
+from protein_fasta.registry.kinds import EntryKind
 from protein_fasta.registry.rules import RegistryDiagnosticRules, load_registry_diagnostics
 from protein_fasta.schema.build import (
     BuildArtifactDocument,
@@ -302,12 +304,13 @@ def run_database_build(effective: EffectiveDatabaseBuildDocument) -> DatabaseBui
         for block in effective.contaminant_blocks
     )
 
+    diagnostics = load_registry_diagnostics(effective.diagnostics)
     result = build_database(
         targets=target_entries,
         name_fields=effective.name_fields,
         naming=effective.naming,
         metadata=effective.metadata,
-        diagnostics=load_registry_diagnostics(effective.diagnostics),
+        diagnostics=diagnostics,
         output_dir=effective.output_dir,
         date=effective.date,
         template=effective.template,
@@ -323,10 +326,69 @@ def run_database_build(effective: EffectiveDatabaseBuildDocument) -> DatabaseBui
         *(block.path for block in effective.contaminant_blocks),
         *effective.foreign_sources,
     )
-    result_document = _result_document(effective, result, effective_path, input_paths)
+    inventory_path = result.path.with_suffix(f"{result.path.suffix}.protein-inventory.parquet")
+    inventory_rows = _write_protein_inventory(result, diagnostics, inventory_path)
+    result_document = _result_document(
+        effective,
+        result,
+        effective_path,
+        input_paths,
+        inventory_path,
+        inventory_rows,
+    )
     result_path = result.path.with_suffix(f"{result.path.suffix}.result.json")
     _write_json_atomic(result_path, result_document.model_dump(mode="json"))
     return DatabaseBuildExecution(result, result_document, effective_path, result_path)
+
+
+def _write_protein_inventory(
+    result: PipelineResult,
+    diagnostics: RegistryDiagnosticRules,
+    path: Path,
+) -> int:
+    """Write the final FASTA order and operational provenance as Parquet."""
+    try:
+        import polars as pl
+    except ModuleNotFoundError as error:
+        if error.name == "polars":
+            message = "protein inventory output requires the 'protein-fasta[frame]' extra"
+            raise RuntimeError(message) from error
+        raise
+    rows: list[dict[str, object]] = []
+    block_state: ContaminantBlockState | None = None
+    for order, record in enumerate(_read_existing_records(result.path)):
+        header = parse_header(record.raw_header)
+        _, classifications = diagnostics.rules.diagnose_identifier(header.id)
+        kind, contaminant_group, block_state = classify_record(
+            record.raw_header,
+            classifications,
+            block_state,
+            diagnostics.decoy_prefix,
+        )
+        rows.append(
+            {
+                "final_order": order,
+                "raw_header": record.raw_header,
+                "id": header.id,
+                "description": header.description,
+                "sequence": record.sequence,
+                "kind": kind.value,
+                "contaminant_group": contaminant_group,
+                "sequence_hash": sequence_hash(record.sequence).hex(),
+                "decoy_mode": (
+                    result.decoy.mode
+                    if kind is EntryKind.DECOY and result.decoy is not None
+                    else None
+                ),
+                "entrapment_strategy": (
+                    result.entrapment.strategy
+                    if kind is EntryKind.ENTRAPMENT and result.entrapment is not None
+                    else None
+                ),
+            }
+        )
+    pl.DataFrame(rows).write_parquet(path)
+    return len(rows)
 
 
 def _resolved_path(path: Path, base: Path) -> Path:
@@ -401,6 +463,8 @@ def _result_document(
     result: PipelineResult,
     effective_path: Path,
     input_paths: tuple[Path, ...],
+    inventory_path: Path,
+    inventory_rows: int,
 ) -> DatabaseBuildResultDocument:
     summary = result.summary
     frequencies = (
@@ -433,6 +497,13 @@ def _result_document(
             schema_name="protein-fasta",
             schema_version="1",
             row_count=result.n_total,
+        ),
+        _artifact(
+            inventory_path,
+            relative_to=effective.output_dir,
+            schema_name="protein-inventory",
+            schema_version="1",
+            row_count=inventory_rows,
         ),
     ]
     if result.entrapment_pairs_path is not None:

@@ -6,6 +6,7 @@ import datetime
 import inspect
 from pathlib import Path
 
+import polars as pl
 import pytest
 
 from protein_fasta.database_build import (
@@ -20,6 +21,8 @@ from protein_fasta.reading.header import parse_header
 from protein_fasta.reading.parser import FastaReadError, read_records
 from protein_fasta.registry.rules import load_registry_diagnostics
 from protein_fasta.schema.build import (
+    ContaminantBlockDocument,
+    DecoyDocument,
     EffectiveDatabaseBuildDocument,
     EntrapmentDocument,
     EntrapmentStrategy,
@@ -72,6 +75,48 @@ def test_effective_request_is_written_before_source_reading(tmp_path: Path) -> N
 
     effective_path = tmp_path / "out" / "failed_20260828.fasta.effective.json"
     assert effective_path.is_file()
+
+
+def test_workflow_inventory_preserves_final_kinds_and_generation_evidence(tmp_path: Path) -> None:
+    target = tmp_path / "target.fasta"
+    contaminant = tmp_path / "contaminant.fasta"
+    target.write_text(">sp|P1|ONE target\nPEPTIDEK\n")
+    contaminant.write_text(">sp|Cont_C1|C1 contaminant\nSAMPLEK\n")
+    effective = EffectiveDatabaseBuildDocument(
+        targets=(target,),
+        output_dir=tmp_path / "out",
+        date=datetime.date(2026, 8, 28),
+        name_fields={"description": "inventory"},
+        template="derived",
+        naming=NamingDocument(default_dbname="derived"),
+        metadata=MetadataDocument(),
+        decoy=DecoyDocument(),
+        contaminant_blocks=(
+            ContaminantBlockDocument(
+                name="routine",
+                description="routine contaminants",
+                path=contaminant,
+            ),
+        ),
+    )
+
+    execution = run_database_build(effective)
+
+    artifact = next(
+        item for item in execution.document.artifacts if item.schema_name == "protein-inventory"
+    )
+    inventory = pl.read_parquet(effective.output_dir / artifact.path)
+    assert inventory["kind"].to_list() == [
+        "sentinel",
+        "target",
+        "sentinel",
+        "contaminant",
+        "decoy",
+        "decoy",
+    ]
+    assert inventory["contaminant_group"].to_list()[3] == "routine"
+    assert inventory["decoy_mode"].drop_nulls().to_list() == ["reverse", "reverse"]
+    assert inventory["entrapment_strategy"].null_count() == inventory.height
 
 
 def test_build_writes_metadata_targets_and_contaminant_markers(tmp_path: Path) -> None:

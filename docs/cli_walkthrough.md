@@ -133,7 +133,8 @@ protein-fasta table "$WORK/mixed.fasta" "$WORK/checksums.csv" \
 ## Build a database
 
 The request contains the per-run inputs and naming values; the packaged FGCZ profile supplies
-portable defaults. The command writes the FASTA, effective request JSON, and typed result JSON.
+portable defaults. The command writes the FASTA, protein inventory Parquet, effective request JSON,
+and typed result JSON.
 
 {{ cli('protein-fasta build "$WORK/build.json"') }}
 
