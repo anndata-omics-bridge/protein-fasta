@@ -4,77 +4,107 @@ root_packages =
 include_external_packages = True
 
 [importlinter:contract:package-tree]
-name = Root composition owns independent children
+name = Public products and composition modules depend inward
 type = layers
 containers =
     protein_fasta
 exhaustive = True
 layers =
-    compile
-    reading | headers | classification | validation | schema
+    cli
+    database_build | diagnostic_summary
+    registry
+    build | record | frame | writing | summary
+    analytics_compile
+    compile | frame_compile | documents
+    analytics | reading | validation | diagnostics | frame_formats | schema
 
-[importlinter:contract:reading-tree]
-name = Reading parser depends on its record values
+[importlinter:contract:registry-backend]
+name = Registry backend dependencies point inward
 type = layers
 containers =
-    protein_fasta.reading
+    protein_fasta.registry.backend
 exhaustive = True
 layers =
-    parser
-    record
+    factory
+    sqlite | duckdb
+    base | schema
 
-[importlinter:contract:headers-tree]
-name = UniProt interpretation extends generic header values
+[importlinter:contract:build-components]
+name = Generation is independent from naming and metadata rendering
 type = layers
 containers =
-    protein_fasta.headers
+    protein_fasta.build
 exhaustive = True
 layers =
-    uniprot
-    generic
+    generation
+    metadata | naming
 
-[importlinter:contract:classification-tree]
-name = Classification operations share only entry kinds
+[importlinter:contract:registry-components]
+name = Registry queries depend on independent backend and kind values
 type = layers
 containers =
-    protein_fasta.classification
+    protein_fasta.registry
 exhaustive = True
 layers =
-    classifier | patterns
-    kinds
+    comparisons
+    indexing | clustering
+    export | pair_metrics | snapshots | classification | metadata
+    backend | filenames | kinds | rules
 
-[importlinter:contract:validation-tree]
-name = Validation operations are independent
+[importlinter:contract:reading-components]
+name = Lexical parsing and generic header splitting are independent
 type = independence
 modules =
-    protein_fasta.validation.sequence
-    protein_fasta.validation.namespace
+    protein_fasta.reading.parser
+    protein_fasta.reading.header
+
+[importlinter:contract:frame-formats-tree]
+name = Polars frame operations depend only on runtime values
+type = layers
+containers =
+    protein_fasta.frame_formats
+exhaustive = True
+layers =
+    classification | detection | extraction
+    runtime
 
 [importlinter:contract:schema-tree]
-name = Schema documents share only their schema base
+name = Schema documents share only their strict base
 type = layers
 containers =
     protein_fasta.schema
 exhaustive = True
 layers =
-    headers | classification | validation
+    registry
+    build
+    analytics | diagnostics | frame_formats
     base
 
-[importlinter:contract:runtime-framework-isolation]
-name = Runtime children do not import storage or consumer frameworks
+[importlinter:contract:scalar-runtime-framework-isolation]
+name = Scalar runtime children do not import storage or frame frameworks
 type = forbidden
 source_modules =
     protein_fasta.reading
-    protein_fasta.headers
-    protein_fasta.classification
     protein_fasta.validation
+    protein_fasta.diagnostics
 forbidden_modules =
     pydantic
-    pandas
     polars
+    pandas
     numpy
     anndata
     mudata
     anndata_proteomics
     fasta_gen
     prozor
+
+[importlinter:contract:consumer-isolation]
+name = The shared package imports no consuming application
+type = forbidden
+source_modules =
+    protein_fasta
+forbidden_modules =
+    fasta_gen
+    prozor
+    apb
+    apb2

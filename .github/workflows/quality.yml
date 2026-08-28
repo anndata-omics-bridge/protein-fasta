@@ -27,7 +27,7 @@ jobs:
           enable-cache: true
 
       - name: Synchronize environment
-        run: uv sync --frozen --group dev
+        run: uv sync --frozen --group dev --extra cli --extra frame
 
       - name: Run quality gates
         run: make check

@@ -1,0 +1,28 @@
+{
+  "schema_version": "0.1",
+  "file_version": "2",
+  "classifiers": [
+    {
+      "name": "decoy",
+      "output_column": "is_decoy",
+      "match_patterns": [],
+      "removable_prefix_patterns": [
+        "^REV_",
+        "^DECOY_",
+        "^reverse_"
+      ],
+      "removable_suffix_patterns": []
+    },
+    {
+      "name": "contaminant",
+      "output_column": "is_contaminant",
+      "match_patterns": [],
+      "removable_prefix_patterns": [
+        "^CON__",
+        "^CON_",
+        "^CONTAMINANT_"
+      ],
+      "removable_suffix_patterns": []
+    }
+  ]
+}

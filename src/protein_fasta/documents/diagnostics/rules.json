@@ -1,0 +1,35 @@
+{
+  "schema_version": "0.1",
+  "file_version": "1",
+  "allowed_residues": "ACDEFGHIKLMNPQRSTVWYXBZUOJ",
+  "identifier_namespaces": [
+    {
+      "name": "uniprot",
+      "pattern": "^(?:sp|tr)\\|[^|\\s]+\\|[^|\\s]+$"
+    },
+    {
+      "name": "uniprot_bare",
+      "pattern": "^(?:[OPQ][0-9][A-Z0-9]{3}[0-9]|[A-NR-Z][0-9](?:[A-Z][A-Z0-9]{2}[0-9]){1,2})(?:-[0-9]+)?$"
+    },
+    {
+      "name": "pdb",
+      "pattern": "^pdb\\|[0-9A-Za-z]{4}\\|[A-Za-z0-9]$"
+    },
+    {
+      "name": "refseq",
+      "pattern": "^(?:ref\\|)?(?:AP|NP|XP|YP|ZP|WP)_[0-9]{6,}(?:\\.[0-9]+)?(?:\\|)?$"
+    },
+    {
+      "name": "genbank",
+      "pattern": "^(?:[A-Z]{3}[0-9]{5}|[A-Z]{2}[0-9]{6})(?:\\.[0-9]+)?$"
+    },
+    {
+      "name": "ensembl",
+      "pattern": "^ENS[A-Z]{0,4}[GTP][0-9]{6,}(?:\\.[0-9]+)?$"
+    },
+    {
+      "name": "nextprot",
+      "pattern": "^NX_[A-Z0-9]+$"
+    }
+  ]
+}

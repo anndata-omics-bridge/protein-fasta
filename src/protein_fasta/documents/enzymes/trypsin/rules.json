@@ -1,0 +1,6 @@
+{
+  "schema_version": "0.1",
+  "file_version": "1",
+  "name": "trypsin",
+  "cleavage_pattern": "[KR](?!P)"
+}

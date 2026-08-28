@@ -9,8 +9,14 @@ from pathlib import Path
 
 import pytest
 
-from protein_fasta.reading.parser import parse_records, parse_text, read_headers, read_records
-from protein_fasta.reading.record import FastaReadError, FastaRecord
+from protein_fasta.reading.parser import (
+    FastaReadError,
+    FastaRecord,
+    parse_records,
+    parse_text,
+    read_headers,
+    read_records,
+)
 
 
 @pytest.mark.parametrize("suffix", [".fasta", ".fasta.gz", ".fasta.bz2"])
@@ -31,6 +37,15 @@ def test_read_records_streams_plain_and_compressed_sources(tmp_path: Path, suffi
         FastaRecord("sp|P2|TWO", "EF-G"),
     ]
     assert list(read_headers(path)) == ["sp|P1|ONE first", "sp|P2|TWO"]
+
+
+def test_read_headers_preserves_header_text_without_reading_sequence_content(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "headers.fasta"
+    path.write_bytes(b">P1   exact  spacing \nSEQUENCE\n>P2\tsecond\r\nANOTHER\n")
+
+    assert list(read_headers(path)) == ["P1   exact  spacing ", "P2\tsecond"]
 
 
 def test_parse_text_is_explicit_and_preserves_empty_records() -> None:
@@ -58,15 +73,15 @@ def test_read_records_reports_non_utf8_path(tmp_path: Path) -> None:
     path = tmp_path / "legacy.fasta"
     path.write_bytes(b">P1\n\xff\n")
 
-    with pytest.raises(FastaReadError, match=r"legacy\.fasta: input is not valid UTF-8"):
+    with pytest.raises(FastaReadError, match=r"legacy\.fasta: file is not valid UTF-8"):
         list(read_records(path))
 
 
 def test_read_records_reports_missing_path(tmp_path: Path) -> None:
     path = tmp_path / "missing.fasta"
 
-    with pytest.raises(FastaReadError, match=r"missing\.fasta: input cannot be read"):
+    with pytest.raises(FastaReadError, match=r"missing\.fasta: file cannot be read"):
         list(read_records(path))
 
-    with pytest.raises(FastaReadError, match=r"missing\.fasta: input cannot be read"):
+    with pytest.raises(FastaReadError, match=r"missing\.fasta: file cannot be read"):
         list(read_headers(path))

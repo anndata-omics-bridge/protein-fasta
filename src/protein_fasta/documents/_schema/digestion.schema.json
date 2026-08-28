@@ -1,0 +1,32 @@
+{
+  "additionalProperties": false,
+  "description": "Peptide-length and missed-cleavage limits for one enzyme.",
+  "properties": {
+    "enzyme": {
+      "default": "trypsin",
+      "title": "Enzyme",
+      "type": "string"
+    },
+    "max_length": {
+      "default": 50,
+      "minimum": 1,
+      "title": "Max Length",
+      "type": "integer"
+    },
+    "min_length": {
+      "default": 7,
+      "minimum": 1,
+      "title": "Min Length",
+      "type": "integer"
+    },
+    "missed_cleavages": {
+      "default": 0,
+      "maximum": 2,
+      "minimum": 0,
+      "title": "Missed Cleavages",
+      "type": "integer"
+    }
+  },
+  "title": "DigestionDocument",
+  "type": "object"
+}

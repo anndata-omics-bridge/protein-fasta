@@ -33,10 +33,10 @@ jobs:
         run: uv python install
 
       - name: Synchronize documentation environment
-        run: uv sync --frozen --only-group docs
+        run: uv sync --frozen --group docs --extra cli --extra frame
 
       - name: Build documentation
-        run: uv run --no-sync mkdocs build --strict
+        run: uv run --no-sync zensical build --clean --strict
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v5

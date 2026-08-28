@@ -1,0 +1,12 @@
+{
+  "schema_version": "0.1",
+  "targets": ["alpha.fasta"],
+  "output_dir": "out",
+  "date": "2026-08-27",
+  "name_fields": {
+    "project": 1,
+    "dbn": 1,
+    "description": "walkthrough"
+  },
+  "add_decoys": false
+}

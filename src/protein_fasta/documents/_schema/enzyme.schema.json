@@ -1,0 +1,34 @@
+{
+  "additionalProperties": false,
+  "description": "One named cleavage rule authored as a regular expression.",
+  "properties": {
+    "cleavage_pattern": {
+      "minLength": 1,
+      "title": "Cleavage Pattern",
+      "type": "string"
+    },
+    "file_version": {
+      "minLength": 1,
+      "title": "File Version",
+      "type": "string"
+    },
+    "name": {
+      "minLength": 1,
+      "title": "Name",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "0.1",
+      "default": "0.1",
+      "title": "Schema Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "file_version",
+    "name",
+    "cleavage_pattern"
+  ],
+  "title": "EnzymeDocument",
+  "type": "object"
+}

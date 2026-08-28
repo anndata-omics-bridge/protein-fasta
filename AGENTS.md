@@ -6,9 +6,9 @@ The closest `AGENTS.md` wins. Explicit user instructions override this file.
 
 | Task | Command |
 | --- | --- |
-| Synchronize | `uv sync --frozen --group dev` |
-| Format | `.venv/bin/ruff format src tests benchmarks && .venv/bin/ruff check --fix src tests benchmarks` |
-| Lint | `.venv/bin/ruff check src tests benchmarks` |
+| Synchronize | `uv sync --frozen --group dev --extra cli --extra frame --extra duckdb --extra generation` |
+| Format | `.venv/bin/ruff format src tests benchmarks scripts docs_macros.py && .venv/bin/ruff check --fix src tests benchmarks scripts docs_macros.py` |
+| Lint | `.venv/bin/ruff check src tests benchmarks scripts docs_macros.py` |
 | Typecheck | `.venv/bin/pyright` |
 | Dependencies | `.venv/bin/deptry .` |
 | Architecture | `.venv/bin/lint-imports` |
@@ -31,13 +31,21 @@ The closest `AGENTS.md` wins. Explicit user instructions override this file.
 
 ## Dependency rules
 
-`protein_fasta` is a strict component tree. Root module `compile.py` may compose the independent
-`schema`, `headers`, `classification`, and `validation` children. Child packages never import the
-root or one another. `reading` is independent of every other child. The exhaustive contracts in
-`.importlinter` are the executable definition.
+`protein_fasta` has an explicit inward dependency structure. The outer `cli.py` adapter may compose
+the root products. `database_build.py` owns reusable file assembly; `build/` owns only naming,
+metadata records, and generation. `analytics/` owns backend-free hashing, digestion, comparison,
+and clustering and never imports build or persistence. `registry/` owns indexing, comparison
+queries, schema versioning, snapshots, and concrete SQLite/optional DuckDB adapters. `record.py`,
+`frame.py`, `writing.py`, and `summary.py` retain their focused products. The inward leaf packages
+are `analytics`, `reading`, `validation`, `diagnostics`, `frame_formats`, and `schema`; the
+exhaustive contracts in `.importlinter` are the executable definition.
 
-Pydantic is restricted to `schema/` and the root composition module. Runtime reading, header,
-classification, and validation modules do not import Pydantic or either consuming application.
+Pydantic documents are passive and live in `schema/`; loading and compilation occur at root
+boundaries. Polars is restricted to the optional CLI/frame and registry-export boundary. Scalar
+reading, normalization, diagnostics, and analytics import neither framework nor a consuming
+application. Sequence and peptide hashes are versioned BLAKE2b-128 over already-normalized
+supplied values; exact-file provenance is versioned non-security MD5. Build naming and `aa|`
+metadata construction do not own analytical hashes or registry persistence.
 
 ### MUST
 
@@ -51,6 +59,8 @@ classification, and validation modules do not import Pydantic or either consumin
 - Prefer the standard library, then an existing direct dependency, then a small,
   maintained, typed dependency.
 - Keep source independent of test, build, documentation, and CLI-only packages.
+- Keep the executable CLI walkthrough shell-first: authored commands live in its Markdown page,
+  Zensical captures them through `docs_macros.py`, and `make docs` must fail on command drift.
 
 ### MUST NOT
 

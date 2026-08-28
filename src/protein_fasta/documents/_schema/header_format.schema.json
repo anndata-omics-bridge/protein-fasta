@@ -1,0 +1,138 @@
+{
+  "$defs": {
+    "ColumnType": {
+      "enum": [
+        "string",
+        "integer",
+        "number",
+        "boolean"
+      ],
+      "type": "string"
+    },
+    "ColumnValue": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "integer"
+        },
+        {
+          "type": "number"
+        },
+        {
+          "type": "boolean"
+        }
+      ]
+    },
+    "HeaderColumnDocument": {
+      "additionalProperties": false,
+      "description": "One literal or regex-extracted output column.",
+      "properties": {
+        "name": {
+          "pattern": "^[a-z][a-z0-9_]*$",
+          "title": "Name",
+          "type": "string"
+        },
+        "pattern": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Pattern"
+        },
+        "type": {
+          "$ref": "#/$defs/ColumnType",
+          "default": "string"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ColumnValue"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "values": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Values",
+          "type": "object"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "HeaderColumnDocument",
+      "type": "object"
+    },
+    "HeaderColumnsDocument": {
+      "additionalProperties": false,
+      "description": "Required and optional columns in output order.",
+      "properties": {
+        "optional": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/HeaderColumnDocument"
+          },
+          "title": "Optional",
+          "type": "array"
+        },
+        "required": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/HeaderColumnDocument"
+          },
+          "title": "Required",
+          "type": "array"
+        }
+      },
+      "title": "HeaderColumnsDocument",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Versioned recognition and extraction rules for one database.",
+  "properties": {
+    "columns": {
+      "$ref": "#/$defs/HeaderColumnsDocument"
+    },
+    "detection_pattern": {
+      "title": "Detection Pattern",
+      "type": "string"
+    },
+    "file_version": {
+      "minLength": 1,
+      "title": "File Version",
+      "type": "string"
+    },
+    "format": {
+      "pattern": "^[a-z][a-z0-9_]*$",
+      "title": "Format",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "0.1",
+      "default": "0.1",
+      "title": "Schema Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "file_version",
+    "format",
+    "detection_pattern",
+    "columns"
+  ],
+  "title": "HeaderFormatDocument",
+  "type": "object"
+}

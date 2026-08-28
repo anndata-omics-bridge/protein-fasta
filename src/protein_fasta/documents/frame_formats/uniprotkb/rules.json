@@ -1,0 +1,76 @@
+{
+  "schema_version": "0.1",
+  "file_version": "1",
+  "format": "uniprotkb",
+  "detection_pattern": "^(?:sp|tr)\\|[^\\s|]+\\|[^\\s|]+_[^_\\s]+\\s+.+$",
+  "columns": {
+    "required": [
+      {
+        "name": "database",
+        "value": "uniprotkb",
+        "type": "string"
+      },
+      {
+        "name": "review_status",
+        "pattern": "^(sp|tr)\\|",
+        "type": "string",
+        "values": {
+          "sp": "reviewed",
+          "tr": "unreviewed"
+        }
+      },
+      {
+        "name": "accession",
+        "pattern": "^(?:sp|tr)\\|([^|]+)\\|",
+        "type": "string"
+      },
+      {
+        "name": "entry_name",
+        "pattern": "^(?:sp|tr)\\|[^|]+\\|([^\\s]+)",
+        "type": "string"
+      },
+      {
+        "name": "entry_mnemonic",
+        "pattern": "^(?:sp|tr)\\|[^|]+\\|([^\\s]+)_[^_\\s]+(?:\\s|$)",
+        "type": "string"
+      },
+      {
+        "name": "organism_mnemonic",
+        "pattern": "^(?:sp|tr)\\|[^|]+\\|[^\\s]+_([^_\\s]+)(?:\\s|$)",
+        "type": "string"
+      },
+      {
+        "name": "protein_name",
+        "pattern": "^(?:sp|tr)\\|[^|]+\\|[^\\s]+\\s+(.+?)(?:\\sOS=|\\sOX=|\\sGN=|\\sPE=|\\sSV=|$)",
+        "type": "string"
+      }
+    ],
+    "optional": [
+      {
+        "name": "organism_name",
+        "pattern": "(?:^|\\s)OS=(.+?)(?:\\sOX=|\\sGN=|\\sPE=|\\sSV=|$)",
+        "type": "string"
+      },
+      {
+        "name": "taxonomy_id",
+        "pattern": "(?:^|\\s)OX=([0-9]+)(?:\\s|$)",
+        "type": "integer"
+      },
+      {
+        "name": "gene_name",
+        "pattern": "(?:^|\\s)GN=([^\\s]+)(?:\\s|$)",
+        "type": "string"
+      },
+      {
+        "name": "protein_existence",
+        "pattern": "(?:^|\\s)PE=([0-9]+)(?:\\s|$)",
+        "type": "integer"
+      },
+      {
+        "name": "sequence_version",
+        "pattern": "(?:^|\\s)SV=([0-9]+)(?:\\s|$)",
+        "type": "integer"
+      }
+    ]
+  }
+}

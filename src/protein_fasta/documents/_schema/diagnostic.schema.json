@@ -1,0 +1,59 @@
+{
+  "$defs": {
+    "NamedPatternDocument": {
+      "additionalProperties": false,
+      "description": "One named identifier namespace expression.",
+      "properties": {
+        "name": {
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "pattern": {
+          "title": "Pattern",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "pattern"
+      ],
+      "title": "NamedPatternDocument",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Versioned alphabet and identifier-namespace rules.",
+  "properties": {
+    "allowed_residues": {
+      "minLength": 1,
+      "title": "Allowed Residues",
+      "type": "string"
+    },
+    "file_version": {
+      "minLength": 1,
+      "title": "File Version",
+      "type": "string"
+    },
+    "identifier_namespaces": {
+      "items": {
+        "$ref": "#/$defs/NamedPatternDocument"
+      },
+      "title": "Identifier Namespaces",
+      "type": "array"
+    },
+    "schema_version": {
+      "const": "0.1",
+      "default": "0.1",
+      "title": "Schema Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "file_version",
+    "allowed_residues",
+    "identifier_namespaces"
+  ],
+  "title": "DiagnosticDocument",
+  "type": "object"
+}

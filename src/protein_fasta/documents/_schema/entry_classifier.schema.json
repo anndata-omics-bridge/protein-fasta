@@ -1,0 +1,78 @@
+{
+  "$defs": {
+    "EntryClassifierDocument": {
+      "additionalProperties": false,
+      "description": "One independent label and its identifier decorations.",
+      "properties": {
+        "match_patterns": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Match Patterns",
+          "type": "array"
+        },
+        "name": {
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "output_column": {
+          "pattern": "^[a-z][a-z0-9_]*$",
+          "title": "Output Column",
+          "type": "string"
+        },
+        "removable_prefix_patterns": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Removable Prefix Patterns",
+          "type": "array"
+        },
+        "removable_suffix_patterns": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Removable Suffix Patterns",
+          "type": "array"
+        }
+      },
+      "required": [
+        "name",
+        "output_column"
+      ],
+      "title": "EntryClassifierDocument",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Versioned independent entry classifiers in authored peeling order.",
+  "properties": {
+    "classifiers": {
+      "items": {
+        "$ref": "#/$defs/EntryClassifierDocument"
+      },
+      "title": "Classifiers",
+      "type": "array"
+    },
+    "file_version": {
+      "minLength": 1,
+      "title": "File Version",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "0.1",
+      "default": "0.1",
+      "title": "Schema Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "file_version",
+    "classifiers"
+  ],
+  "title": "EntryClassifierCatalogDocument",
+  "type": "object"
+}

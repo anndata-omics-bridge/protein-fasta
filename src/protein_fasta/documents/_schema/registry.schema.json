@@ -1,0 +1,211 @@
+{
+  "$defs": {
+    "DescriptionDocument": {
+      "additionalProperties": false,
+      "description": "Rules for deriving a compact database-description token.",
+      "properties": {
+        "mode_flags": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Mode Flags",
+          "type": "object"
+        }
+      },
+      "title": "DescriptionDocument",
+      "type": "object"
+    },
+    "MetadataDocument": {
+      "additionalProperties": false,
+      "description": "Configured database metadata and contaminant-marker record grammar.",
+      "properties": {
+        "body_sequence": {
+          "default": "CRAPCRAPCRAP",
+          "title": "Body Sequence",
+          "type": "string"
+        },
+        "date_format": {
+          "default": "%Y-%m-%d",
+          "title": "Date Format",
+          "type": "string"
+        },
+        "id_namespace": {
+          "default": "aa",
+          "title": "Id Namespace",
+          "type": "string"
+        },
+        "installer": {
+          "default": "",
+          "title": "Installer",
+          "type": "string"
+        },
+        "marker_body_sequence": {
+          "default": "MRECRAPCRAPCRAP",
+          "title": "Marker Body Sequence",
+          "type": "string"
+        },
+        "org": {
+          "default": "fgcz",
+          "title": "Org",
+          "type": "string"
+        },
+        "provenance_template": {
+          "default": "generated w {tool} and installed by {installer}, {org}",
+          "title": "Provenance Template",
+          "type": "string"
+        },
+        "tool": {
+          "default": "fasta_gen",
+          "title": "Tool",
+          "type": "string"
+        }
+      },
+      "title": "MetadataDocument",
+      "type": "object"
+    },
+    "NamingDocument": {
+      "additionalProperties": false,
+      "description": "Grammar for canonical database names and FASTA filenames.",
+      "properties": {
+        "allowed_dbname_fields": {
+          "default": [
+            "project",
+            "dbn",
+            "description",
+            "taxid"
+          ],
+          "items": {
+            "type": "string"
+          },
+          "title": "Allowed Dbname Fields",
+          "type": "array"
+        },
+        "date_format": {
+          "default": "%Y%m%d",
+          "title": "Date Format",
+          "type": "string"
+        },
+        "dbname": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Dbname",
+          "type": "object"
+        },
+        "decoy_token": {
+          "default": "d",
+          "title": "Decoy Token",
+          "type": "string"
+        },
+        "default_dbname": {
+          "default": "project",
+          "title": "Default Dbname",
+          "type": "string"
+        },
+        "description": {
+          "$ref": "#/$defs/DescriptionDocument"
+        },
+        "entrapment_token": {
+          "default": "e",
+          "title": "Entrapment Token",
+          "type": "string"
+        },
+        "extension": {
+          "default": "fasta",
+          "title": "Extension",
+          "type": "string"
+        },
+        "filename": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Filename",
+          "type": "object"
+        },
+        "separator": {
+          "default": "_",
+          "title": "Separator",
+          "type": "string"
+        }
+      },
+      "title": "NamingDocument",
+      "type": "object"
+    },
+    "RegistryBackendDocument": {
+      "additionalProperties": false,
+      "description": "Storage engine used when a registry is created.",
+      "properties": {
+        "backend": {
+          "default": "sqlite",
+          "enum": [
+            "sqlite",
+            "duckdb"
+          ],
+          "title": "Backend",
+          "type": "string"
+        }
+      },
+      "title": "RegistryBackendDocument",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Portable indexing and comparison policy for a FASTA registry.\n\nSource and destination paths remain operation arguments: they identify one run,\nwhile this document contains reproducible policy.",
+  "properties": {
+    "max_detailed_entries": {
+      "default": 200000,
+      "exclusiveMinimum": 0,
+      "title": "Max Detailed Entries",
+      "type": "integer"
+    },
+    "max_fasta_file_size_gib": {
+      "default": 5.0,
+      "exclusiveMinimum": 0,
+      "title": "Max Fasta File Size Gib",
+      "type": "number"
+    },
+    "metadata": {
+      "$ref": "#/$defs/MetadataDocument"
+    },
+    "metadata_aa_sample_size": {
+      "default": 20000,
+      "exclusiveMinimum": 0,
+      "title": "Metadata Aa Sample Size",
+      "type": "integer"
+    },
+    "min_fasta_date": {
+      "anyOf": [
+        {
+          "format": "date",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Min Fasta Date"
+    },
+    "naming": {
+      "$ref": "#/$defs/NamingDocument"
+    },
+    "overlap_threshold": {
+      "default": 0.99,
+      "maximum": 1.0,
+      "minimum": 0.0,
+      "title": "Overlap Threshold",
+      "type": "number"
+    },
+    "registry": {
+      "$ref": "#/$defs/RegistryBackendDocument"
+    },
+    "schema_version": {
+      "const": "0.1",
+      "default": "0.1",
+      "title": "Schema Version",
+      "type": "string"
+    }
+  },
+  "title": "RegistryDocument",
+  "type": "object"
+}

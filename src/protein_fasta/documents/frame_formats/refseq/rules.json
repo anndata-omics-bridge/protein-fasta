@@ -1,0 +1,32 @@
+{
+  "schema_version": "0.1",
+  "file_version": "1",
+  "format": "refseq",
+  "detection_pattern": "^ref\\|(?:AP|NP|XP|YP|ZP|WP)_[0-9]{6,}(?:\\.[0-9]+)?\\|\\s+.+$",
+  "columns": {
+    "required": [
+      {
+        "name": "database",
+        "value": "refseq",
+        "type": "string"
+      },
+      {
+        "name": "accession",
+        "pattern": "^ref\\|([^|]+)\\|",
+        "type": "string"
+      },
+      {
+        "name": "protein_name",
+        "pattern": "^ref\\|[^|]+\\|\\s+(.+?)(?:\\s+\\[[^\\[\\]]+\\]\\s*$|$)",
+        "type": "string"
+      }
+    ],
+    "optional": [
+      {
+        "name": "organism_name",
+        "pattern": "\\s+\\[([^\\[\\]]+)\\]\\s*$",
+        "type": "string"
+      }
+    ]
+  }
+}

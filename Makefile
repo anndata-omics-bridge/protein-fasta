@@ -1,24 +1,27 @@
 VENV_BIN := .venv/bin
 
 .DEFAULT_GOAL := help
-.PHONY: help sync format format-check lint imports typecheck deps test build docs check clean
+.PHONY: help sync schemas format format-check lint imports typecheck deps test build docs check clean
 
 help:  ## Show developer commands
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) \
 		| awk 'BEGIN{FS=":.*?## "}{printf "  \033[36m%-14s\033[0m %s\n", $$1, $$2}'
 
 sync:  ## Synchronize the locked development environment
-	uv sync --frozen --group dev
+	uv sync --frozen --group dev --extra cli --extra frame --extra duckdb --extra generation
+
+schemas:  ## Regenerate committed Pydantic JSON Schemas
+	$(VENV_BIN)/python scripts/generate_json_schemas.py
 
 format:  ## Format and autofix source and tests
-	$(VENV_BIN)/ruff format src tests benchmarks
-	$(VENV_BIN)/ruff check --fix src tests benchmarks
+	$(VENV_BIN)/ruff format src tests benchmarks scripts docs_macros.py
+	$(VENV_BIN)/ruff check --fix src tests benchmarks scripts docs_macros.py
 
 format-check:  ## Check formatting without changing files
-	$(VENV_BIN)/ruff format --check src tests benchmarks
+	$(VENV_BIN)/ruff format --check src tests benchmarks scripts docs_macros.py
 
 lint:  ## Run Ruff lint checks
-	$(VENV_BIN)/ruff check src tests benchmarks
+	$(VENV_BIN)/ruff check src tests benchmarks scripts docs_macros.py
 
 imports:  ## Enforce directed package dependencies
 	$(VENV_BIN)/lint-imports
@@ -32,12 +35,32 @@ deps:  ## Validate dependency declarations
 test:  ## Run tests with branch coverage
 	$(VENV_BIN)/pytest --cov --cov-branch
 
-build:  ## Build and validate source and wheel distributions
-	uv build
+build:  ## Build, validate, and smoke-test source and wheel distributions
+	uv build --clear
 	$(VENV_BIN)/twine check dist/*
+	uv run --isolated --no-project --no-cache \
+		--with "$$(printf '%s\n' dist/*.whl)" \
+		python -c 'import importlib.util; import protein_fasta.record; assert importlib.util.find_spec("polars") is None'
+	uv run --isolated --no-project --no-cache \
+		--with 'pytest>=9,<10' \
+		--with "$$(printf '%s\n' dist/*.whl)[frame]" \
+		pytest -q \
+		tests/frame/test_frame.py::test_uniprot_frame_peels_decorations_and_extracts_best_columns \
+		tests/frame/test_frame.py::test_refseq_frame_extracts_accession_name_and_optional_organism
+	uv run --isolated --no-project --no-cache \
+		--with "$$(printf '%s\n' dist/*.whl)[cli]" \
+		protein-fasta --help
+	uv run --isolated --no-project --no-cache \
+		--with 'pytest>=9,<10' \
+		--with "$$(printf '%s\n' dist/*.whl)[cli,duckdb]" \
+		pytest -q \
+		tests/test_cli.py::test_digest_writes_peptides_with_missed_cleavage_evidence \
+		tests/test_cli.py::test_registry_cli_functions_cover_index_compare_pairs_and_cluster \
+		tests/test_cli.py::test_index_accepts_json_registry_policy \
+		tests/test_cli.py::test_build_uses_one_json_request_and_writes_manifest
 
 docs:  ## Build documentation with strict warnings
-	uv run --frozen --group docs mkdocs build --strict
+	uv run --frozen --group docs zensical build --clean --strict
 
 check:  ## Run every merge-blocking quality gate
 	uv lock --check

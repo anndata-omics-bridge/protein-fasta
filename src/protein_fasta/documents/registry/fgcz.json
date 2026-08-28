@@ -1,0 +1,46 @@
+{
+  "schema_version": "0.1",
+  "file_version": "1",
+  "decoy_prefix": "REV_",
+  "max_reported_id_namespaces": 32,
+  "identifier_namespaces": [
+    {
+      "name": "fgcz_sentinel",
+      "pattern": "^aa\\|"
+    },
+    {
+      "name": "fgcz_contaminant",
+      "pattern": "^(?:sp|tr)\\|Cont_|^zh\\|C[0-9]{4}_"
+    }
+  ],
+  "classifiers": [
+    {
+      "name": "decoy",
+      "output_column": "is_decoy",
+      "match_patterns": [],
+      "removable_prefix_patterns": ["^REV_"],
+      "removable_suffix_patterns": []
+    },
+    {
+      "name": "contaminant",
+      "output_column": "is_contaminant",
+      "match_patterns": ["^(?:sp|tr)\\|Cont_", "^zh\\|C[0-9]{4}_"],
+      "removable_prefix_patterns": [],
+      "removable_suffix_patterns": []
+    },
+    {
+      "name": "entrapment",
+      "output_column": "is_entrapment",
+      "match_patterns": [],
+      "removable_prefix_patterns": [],
+      "removable_suffix_patterns": ["_p_target$"]
+    },
+    {
+      "name": "sentinel",
+      "output_column": "is_sentinel",
+      "match_patterns": ["^aa\\|"],
+      "removable_prefix_patterns": [],
+      "removable_suffix_patterns": []
+    }
+  ]
+}

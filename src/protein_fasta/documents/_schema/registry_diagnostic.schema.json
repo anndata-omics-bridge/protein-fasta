@@ -1,0 +1,119 @@
+{
+  "$defs": {
+    "EntryClassifierDocument": {
+      "additionalProperties": false,
+      "description": "One independent label and its identifier decorations.",
+      "properties": {
+        "match_patterns": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Match Patterns",
+          "type": "array"
+        },
+        "name": {
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "output_column": {
+          "pattern": "^[a-z][a-z0-9_]*$",
+          "title": "Output Column",
+          "type": "string"
+        },
+        "removable_prefix_patterns": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Removable Prefix Patterns",
+          "type": "array"
+        },
+        "removable_suffix_patterns": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Removable Suffix Patterns",
+          "type": "array"
+        }
+      },
+      "required": [
+        "name",
+        "output_column"
+      ],
+      "title": "EntryClassifierDocument",
+      "type": "object"
+    },
+    "NamedPatternDocument": {
+      "additionalProperties": false,
+      "description": "One named identifier namespace expression.",
+      "properties": {
+        "name": {
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "pattern": {
+          "title": "Pattern",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "pattern"
+      ],
+      "title": "NamedPatternDocument",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "One versioned extension to the shared FASTA diagnostic rules.",
+  "properties": {
+    "classifiers": {
+      "items": {
+        "$ref": "#/$defs/EntryClassifierDocument"
+      },
+      "title": "Classifiers",
+      "type": "array"
+    },
+    "decoy_prefix": {
+      "minLength": 1,
+      "title": "Decoy Prefix",
+      "type": "string"
+    },
+    "file_version": {
+      "minLength": 1,
+      "title": "File Version",
+      "type": "string"
+    },
+    "identifier_namespaces": {
+      "items": {
+        "$ref": "#/$defs/NamedPatternDocument"
+      },
+      "title": "Identifier Namespaces",
+      "type": "array"
+    },
+    "max_reported_id_namespaces": {
+      "default": 32,
+      "exclusiveMinimum": 0,
+      "title": "Max Reported Id Namespaces",
+      "type": "integer"
+    },
+    "schema_version": {
+      "const": "0.1",
+      "default": "0.1",
+      "title": "Schema Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "file_version",
+    "decoy_prefix",
+    "identifier_namespaces",
+    "classifiers"
+  ],
+  "title": "RegistryDiagnosticDocument",
+  "type": "object"
+}

@@ -4,8 +4,8 @@ build-backend = "uv_build"
 
 [project]
 name = "protein-fasta"
-version = "0.1.0"
-description = "Streaming protein FASTA parsing, header interpretation, classification, and validation."
+version = "0.2.0"
+description = "Streaming protein records and config-driven Polars FASTA frames."
 readme = "README.md"
 requires-python = ">=3.13"
 license = "MIT"
@@ -13,7 +13,31 @@ authors = [
     { name = "Witold Wolski", email = "wew@fgcz.ethz.ch" },
 ]
 dependencies = [
+    "loguru>=0.7,<1",
     "pydantic>=2.13,<3",
+]
+
+[project.scripts]
+protein-fasta = "protein_fasta.cli:main"
+
+[project.optional-dependencies]
+cli = [
+    "cyclopts>=4.20,<5",
+    "fdr_benchmark @ git+https://gitlab.bfabric.org/bioinformatics/fdr_benchmark.git@bbf582e382833cf8bdc439e69edb287842293b02",
+    "loguru>=0.7,<1",
+    "polars>=1.43.2,<2",
+    "xlsxwriter>=3.2,<4",
+]
+frame = [
+    "polars>=1.43.2,<2",
+]
+duckdb = [
+    "duckdb>=1.4.2,<2",
+    "polars>=1.43.2,<2",
+    "pyarrow>=22",
+]
+generation = [
+    "fdr_benchmark @ git+https://gitlab.bfabric.org/bioinformatics/fdr_benchmark.git@bbf582e382833cf8bdc439e69edb287842293b02",
 ]
 
 [project.urls]
@@ -32,7 +56,8 @@ dev = [
     "twine>=6,<7",
 ]
 docs = [
-    "mkdocs-material>=9.7,<10",
+    "pymdown-extensions>=11,<12",
+    "zensical==0.0.43",
 ]
 
 [tool.ruff]
@@ -65,7 +90,7 @@ max-complexity = 10
 docstring-code-format = true
 
 [tool.pyright]
-include = ["src", "tests", "benchmarks"]
+include = ["src", "tests", "benchmarks", "scripts", "docs_macros.py"]
 venvPath = "."
 venv = ".venv"
 pythonVersion = "3.13"
@@ -92,3 +117,7 @@ skip_covered = true
 
 [tool.deptry]
 known_first_party = ["protein_fasta"]
+extend_exclude = ["docs_macros\\.py"]
+# Polars loads its declared XlsxWriter engine dynamically when `write_excel()` is called, so no
+# direct import exists for Deptry to observe.
+per_rule_ignores = { DEP002 = ["pyarrow", "xlsxwriter"] }
