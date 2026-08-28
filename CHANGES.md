@@ -1,5 +1,11 @@
 # Changes
 
+- 2026-08-28: Added a credential-free public Quality gate that checks every public capability while
+  leaving only the private `fdr_benchmark` algorithm adapters to the full generation gate. Moved
+  entrapment peptide-pair evidence and stable TSV serialization behind a dependency-free
+  `protein_fasta` runtime type so biological builds and downstream consumers no longer leak the
+  optional package's data model.
+
 - 2026-08-28: Completed the staged protein and peptide workflow API. Added immutable UniProt
   catalog snapshots and all three acquisition modes; canonical protein-input, biological,
   search, peptide, mapping, comparison, entrapment-pair, candidate, and decoy-report artifacts;

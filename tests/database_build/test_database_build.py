@@ -240,6 +240,7 @@ def test_build_rejects_conflicting_ids_after_normalization(tmp_path: Path) -> No
         )
 
 
+@pytest.mark.generation
 def test_entrapment_joins_the_biological_database_without_decoys(tmp_path: Path) -> None:
     diagnostics = load_registry_diagnostics()
     result = build_database(
@@ -276,6 +277,7 @@ def test_entrapment_joins_the_biological_database_without_decoys(tmp_path: Path)
     assert result.entrapment.requested_fold == result.entrapment.achieved_fold == 1
 
 
+@pytest.mark.generation
 def test_foreign_species_entrapment_does_not_claim_peptide_pairs(tmp_path: Path) -> None:
     result = build_database(
         targets=(("sp|P1|ONE first", "MPEPTIDEKTESTSEQUENCEK"),),

@@ -73,7 +73,7 @@ from protein_fasta.validation.sequence import normalize_sequence
 if TYPE_CHECKING:
     import polars as pl
 
-    from protein_fasta.build.generation.entrapment import (
+    from protein_fasta.build.generation.entrapment_types import (
         EntrapmentBatch,
         EntrapmentGeneration,
     )

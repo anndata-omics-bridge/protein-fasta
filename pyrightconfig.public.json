@@ -1,0 +1,17 @@
+{
+  "include": ["src", "tests", "benchmarks", "scripts", "docs_macros.py"],
+  "ignore": [
+    "src/protein_fasta/build/generation/entrapment.py",
+    "src/protein_fasta/build/generation/fdr_decoy.py",
+    "tests/database_build/test_decoy.py"
+  ],
+  "venvPath": ".",
+  "venv": ".venv",
+  "pythonVersion": "3.13",
+  "typeCheckingMode": "strict",
+  "reportImportCycles": "error",
+  "reportMissingTypeStubs": "error",
+  "reportUnnecessaryTypeIgnoreComment": "error",
+  "reportImplicitOverride": "error",
+  "enableTypeIgnoreComments": false
+}

@@ -109,6 +109,9 @@ enableTypeIgnoreComments = false
 [tool.pytest.ini_options]
 addopts = ["--strict-config", "--strict-markers", "-ra"]
 testpaths = ["tests"]
+markers = [
+    "generation: requires the private advanced-generation dependency",
+]
 xfail_strict = true
 
 [tool.coverage.run]

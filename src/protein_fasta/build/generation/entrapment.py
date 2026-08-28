@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import importlib.metadata
 from dataclasses import asdict, dataclass
-from typing import Any, Protocol, cast
+from typing import Any, cast
 
 from fdr_benchmark.entrapment.foreign_species import generate_foreign_species_entrapment
 from fdr_benchmark.entrapment.shuffled import generate_shuffled_entrapment
@@ -24,10 +24,14 @@ from fdr_benchmark.models import (
     EntrapmentRequest,
     ExhaustionPolicy,
     FastaRecord,
-    PeptidePairRecord,
 )
 
 from protein_fasta.analytics_compile import make_digestion
+from protein_fasta.build.generation.entrapment_types import (
+    EntrapmentBatch,
+    EntrapmentGeneration,
+    EntrapmentPeptidePair,
+)
 from protein_fasta.schema.build import EntrapmentDocument, EntrapmentStrategy
 
 Entry = tuple[str, str]
@@ -44,53 +48,6 @@ DEFAULT_ENTRAPMENT_MISSED_CLEAVAGES = 1
 
 
 DEFAULT_ENTRAPMENT_SPEC = EntrapmentDocument()
-
-
-@dataclass(frozen=True, slots=True)
-class EntrapmentBatch:
-    """Generated entries, the peptide mapping, and algorithm evidence."""
-
-    entries: tuple[Entry, ...]
-    peptide_pairs: tuple[PeptidePairRecord, ...]
-    parameters: dict[str, Any]
-    requested_fold: int
-    achieved_fold: int
-    failures: int
-    proteins_affected: int
-    source_proteins: int
-
-    @property
-    def is_complete(self) -> bool:
-        """Whether every source protein reached the requested fold."""
-        return not self.failures and self.achieved_fold >= self.requested_fold
-
-    @property
-    def complete_proteins(self) -> int:
-        """Source proteins that reached the requested fold in full."""
-        return self.source_proteins - self.proteins_affected
-
-
-class EntrapmentGeneration(Protocol):
-    """Generate and describe one compiled entrapment algorithm."""
-
-    @property
-    def strategy(self) -> EntrapmentStrategy: ...
-
-    @property
-    def seed(self) -> int: ...
-
-    def normalize(self, entries: tuple[Entry, ...]) -> tuple[Entry, ...]: ...
-
-    def generate(
-        self,
-        entries: tuple[Entry, ...],
-        *,
-        foreign_entries: tuple[Entry, ...] = (),
-    ) -> EntrapmentBatch: ...
-
-    def parameters(self) -> dict[str, Any]: ...
-
-    def annotation(self, batch: EntrapmentBatch | None = None) -> str: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -208,7 +165,15 @@ def _batch(
     generated = tuple((record.header, record.sequence) for record in result.records)
     return EntrapmentBatch(
         generated,
-        result.peptide_pairs,
+        tuple(
+            EntrapmentPeptidePair(
+                source_id=pair.source_id,
+                target_peptide=pair.target_peptide,
+                generated_peptide=pair.generated_peptide,
+                fold_index=pair.fold_index,
+            )
+            for pair in result.peptide_pairs
+        ),
         parameters,
         result.stats.requested_fold,
         result.stats.achieved_fold,

@@ -1,14 +1,14 @@
 VENV_BIN := .venv/bin
 
 .DEFAULT_GOAL := help
-.PHONY: help sync schemas format format-check lint imports typecheck deps test build docs check clean
+.PHONY: help sync schemas format format-check lint imports typecheck typecheck-public deps test test-public build docs check check-public clean
 
 help:  ## Show developer commands
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) \
 		| awk 'BEGIN{FS=":.*?## "}{printf "  \033[36m%-14s\033[0m %s\n", $$1, $$2}'
 
 sync:  ## Synchronize the locked development environment
-	uv sync --frozen --group dev --extra cli --extra frame --extra duckdb --extra generation
+	uv sync --frozen --group dev --group docs --extra cli --extra frame --extra duckdb --extra generation
 
 schemas:  ## Regenerate committed Pydantic JSON Schemas
 	$(VENV_BIN)/python scripts/generate_json_schemas.py
@@ -29,11 +29,19 @@ imports:  ## Enforce directed package dependencies
 typecheck:  ## Run standard Pyright in strict mode
 	$(VENV_BIN)/pyright
 
+typecheck-public:  ## Type-check the public install without the private generation adapter
+	$(VENV_BIN)/pyright -p pyrightconfig.public.json
+
 deps:  ## Validate dependency declarations
 	$(VENV_BIN)/deptry .
 
 test:  ## Run tests with branch coverage
 	$(VENV_BIN)/pytest --cov --cov-branch
+
+test-public:  ## Test public capabilities without the private generation adapter
+	$(VENV_BIN)/pytest --cov --cov-branch \
+		--ignore=tests/database_build/test_decoy.py \
+		-m "not generation"
 
 build:  ## Build, validate, and smoke-test source and wheel distributions
 	uv build --clear
@@ -74,6 +82,10 @@ docs:  ## Build documentation with strict warnings
 check:  ## Run every merge-blocking quality gate
 	uv lock --check
 	$(MAKE) format-check lint imports typecheck deps test build docs
+
+check-public:  ## Run the credential-free public CI quality gate
+	uv lock --check
+	$(MAKE) format-check lint imports typecheck-public deps test-public build docs
 
 clean:  ## Remove generated build and quality artifacts
 	$(VENV_BIN)/python -c "import shutil; [shutil.rmtree(path, ignore_errors=True) for path in ('build', 'dist', 'public', '.pytest_cache', '.ruff_cache')]"
