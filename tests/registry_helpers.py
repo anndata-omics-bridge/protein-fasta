@@ -8,13 +8,12 @@ from collections.abc import Generator
 from contextlib import contextmanager
 from pathlib import Path
 
-from tests.registry_support import Settings
-
 from protein_fasta.registry.backend import factory
 from protein_fasta.registry.backend.base import RegistryConnection
 from protein_fasta.registry.backend.sqlite import SqliteRegistryConnection
 from protein_fasta.registry.indexing import connect_registry, initialize_registry
 from protein_fasta.registry.snapshots import latest_snapshot, snapshot_name
+from tests.registry_support import Settings
 
 # One fixed instant, so a test's registry has a stable name it can reopen. Production
 # stamps each rebuild with the real time; a test only needs the newest to be findable.
