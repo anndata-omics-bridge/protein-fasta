@@ -122,6 +122,8 @@ def _id_filter(database_ids: Collection[int] | None, column: str) -> tuple[str, 
     if database_ids is None:
         return "", ()
     ids = tuple(sorted(database_ids))
+    if not ids:
+        return " AND 1 = 0", ()
     placeholders = ", ".join("?" for _ in ids)
     return f" AND {column} IN ({placeholders})", ids
 

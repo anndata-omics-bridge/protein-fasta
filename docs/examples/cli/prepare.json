@@ -1,0 +1,11 @@
+{
+  "schema_version": "0.1",
+  "sources": [
+    {
+      "type": "target",
+      "source_id": "alpha-uniprot",
+      "path": "alpha.fasta"
+    }
+  ],
+  "output_parquet": "protein-input.parquet"
+}

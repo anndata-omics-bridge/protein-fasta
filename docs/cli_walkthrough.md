@@ -93,12 +93,19 @@ protein-fasta configured "$WORK/mixed.fasta" "$WORK/mixed-strict.csv" \
 
 {{ cli('head -n 3 "$WORK/mixed-strict.csv"') }}
 
-## Parse decorated identifiers
+## Parse FGCZ `Cont_` and decorated identifiers
 
-Classification removes repeated `REV_` and `CON__` decorations before applying the UniProtKB
-parser, while retaining the original identifier and recording independent boolean flags.
+The application-specific classifier marks `sp|Cont_...` as a contaminant without changing the
+identifier. A leading `REV_` is removed only from the temporary parsing identifier, so the second
+row is both decoy and contaminant. Both rows still receive all UniProtKB metadata.
 
-{{ cli('protein-fasta table "$WORK/decorated.fasta" "$WORK/decorated.csv" --no-sequence') }}
+{% set decorated_command %}
+protein-fasta configured "$WORK/decorated.fasta" "$WORK/decorated.csv" \
+  --rules src/protein_fasta/documents/frame_formats/uniprotkb/rules.json \
+  --classifiers "$WORK/fgcz-classifiers.json" \
+  --no-sequence
+{% endset %}
+{{ cli(decorated_command) }}
 
 {{ cli('head -n 3 "$WORK/decorated.csv"') }}
 
@@ -132,13 +139,29 @@ protein-fasta table "$WORK/mixed.fasta" "$WORK/checksums.csv" \
 
 ## Build a database
 
-The request contains the per-run inputs and naming values; the packaged FGCZ profile supplies
-portable defaults. The command writes the FASTA, protein inventory Parquet, effective request JSON,
-and typed result JSON.
+Source preparation and biological assembly are separate commands. The first writes the canonical
+protein-input Parquet. The second consumes that Parquet plus the biological build parameters and
+writes a decoy-free FASTA and protein inventory.
 
-{{ cli('protein-fasta build "$WORK/build.json"') }}
+{{ cli('protein-fasta prepare "$WORK/prepare.json"') }}
+
+{{ cli('protein-fasta build "$WORK/protein-input.parquet" "$WORK/build.json"') }}
 
 {{ cli('head -n 3 "$WORK/out/p1_db1_walkthrough_20260827.fasta"') }}
+
+## Generate the search database
+
+Decoy generation is a subsequent operation over the biological inventory. It does not repeat
+source preparation or biological assembly.
+
+{% set decoy_command %}
+protein-fasta decoy \
+  "$WORK/out/p1_db1_walkthrough_20260827.fasta.protein-inventory.parquet" \
+  "$WORK/decoy.json"
+{% endset %}
+{{ cli(decoy_command) }}
+
+{{ cli('head -n 3 "$WORK/out/p1_db1_walkthrough_d_20260827.fasta"') }}
 
 ## Index the example collection with SQLite
 
@@ -151,6 +174,66 @@ protein-fasta index "$WORK/registry-input" "$WORK/registry.duckdb" \
   --config "$WORK/registry-duckdb.json"
 {% endset %}
 {{ cli(duckdb_index_command) }}
+
+## Index a canonical inventory directly
+
+The preferred handoff indexes the accepted protein or search inventory without reparsing FASTA.
+
+{% set inventory_index_command %}
+protein-fasta index-inventory \
+  "$WORK/out/p1_db1_walkthrough_d_20260827.fasta.search-inventory.parquet" \
+  "$WORK/inventory-registry.duckdb" \
+  --config "$WORK/registry-duckdb.json"
+{% endset %}
+{{ cli(inventory_index_command) }}
+
+## Review a candidate without registering it
+
+{% set candidate_command %}
+protein-fasta candidate \
+  "$WORK/out/p1_db1_walkthrough_d_20260827.fasta.search-inventory.parquet" \
+  "$WORK/registry.duckdb" \
+  "$WORK/candidate.json" \
+  --config "$WORK/registry-duckdb.json"
+{% endset %}
+{{ cli(candidate_command) }}
+
+## Derive clean source rows from a search database
+
+The derived-input operation retains target and contaminant proteins and explicitly counts prior
+sentinel, section-marker, entrapment, and decoy rows that it excludes.
+
+{{ cli('protein-fasta derive-input "$WORK/derive-input.json"') }}
+
+## Build canonical peptide artifacts
+
+{% set peptide_command %}
+protein-fasta peptides \
+  "$WORK/out/p1_db1_walkthrough_d_20260827.fasta.search-inventory.parquet" \
+  "$WORK/peptides.json"
+{% endset %}
+{{ cli(peptide_command) }}
+
+{{ cli('head -n 3 "$WORK/out/peptides.fasta"') }}
+
+## Compare peptide inventories
+
+{% set peptide_comparison_command %}
+protein-fasta pepcompare \
+  "$WORK/out/peptides.parquet" \
+  "$WORK/out/peptides.parquet" \
+  "$WORK/peptide-comparison.json"
+{% endset %}
+{{ cli(peptide_comparison_command) }}
+
+## Compare decoy methods
+
+{% set decoy_report_command %}
+protein-fasta decoy-report \
+  "$WORK/out/p1_db1_walkthrough_20260827.fasta.protein-inventory.parquet" \
+  "$WORK/decoy-report.json"
+{% endset %}
+{{ cli(decoy_report_command) }}
 
 ## Export the SQLite registry summary
 

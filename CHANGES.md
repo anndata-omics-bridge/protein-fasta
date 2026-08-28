@@ -1,5 +1,19 @@
 # Changes
 
+- 2026-08-28: Completed the staged protein and peptide workflow API. Added immutable UniProt
+  catalog snapshots and all three acquisition modes; canonical protein-input, biological,
+  search, peptide, mapping, comparison, entrapment-pair, candidate, and decoy-report artifacts;
+  SQLite/DuckDB inventory indexing; and matching Cyclopts commands. Biological `build` and
+  subsequent `decoy` are independent replayable operations. Added a validated in-memory Polars
+  build adapter that persists its replay input and delegates to the artifact build path. Moved
+  the reusable UniProt, candidate, peptide, decoy-diagnostic, and derived-entrapment workflows
+  out of `fasta_gen`. Reworked the documentation around portrait use-case workflows and an
+  executable 50-entry UniProtKB/RefSeq/mixed/contaminant walkthrough.
+
+- 2026-08-28: Made empty registry neighbourhoods portable: an empty database-id selection now
+  compiles to a false predicate instead of `IN ()`, which SQLite accepted but DuckDB rejected.
+  Added cross-backend coverage for the empty selection.
+
 - 2026-08-28: Declared `license-files`, without which uv_build shipped wheels carrying no licence
   text even though the repository had a `LICENSE` file.
 
@@ -7,9 +21,9 @@
   per-run request and typed CLI overrides into a replayable effective request, then
   `run_database_build()` writes the effective JSON before source reading and a typed result JSON
   after completion. The result records relative checksummed artifacts, complete length/amino-acid
-  summaries, reconciled counts, normalization, and generation evidence. `protein-fasta build`
-  owns the optional decoy stage directly; the low-level `add_decoys` boolean was removed in favor
-  of an absent or present decoy specification. Every workflow build also writes a final-order
+  summaries, reconciled counts, normalization, and biological-generation evidence.
+  `protein-fasta build` produces only the biological database; `protein-fasta decoy` consumes
+  that database's inventory afterward. Every workflow build also writes a final-order
   protein inventory Parquet with raw headers, normalized fields, operational kinds, contaminant
   blocks, sequence hashes, and generation labels. Added portrait workflow and class diagrams
   before the implementation documentation.

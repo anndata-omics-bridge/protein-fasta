@@ -12,14 +12,15 @@ It provides:
 - an exact three-column base Polars frame;
 - config-driven homogeneous UniProtKB and RefSeq enrichment;
 - versioned fast sequence/peptide hashes and exact-file checksums;
-- configured digestion, decoy/entrapment generation, naming, metadata, and database assembly;
+- UniProt catalog synchronization and reproducible proteome FASTA acquisition;
+- separate source preparation, biological assembly, and subsequent decoy generation;
+- canonical peptide inventories, mappings, FASTA products, and exact comparisons;
 - SQLite and DuckDB registry indexing, pair metrics, comparison fingerprints, and clustering; and
 - optional table, build, registry, and analytical commands through Cyclopts.
 
-The package deliberately excludes AnnData/MuData persistence, peptide matching, protein
-inference, application installation, the curated contaminant/QC catalog, and UniProt download at
-this stage.
+The package deliberately excludes AnnData/MuData persistence, protein inference, application
+installation and authorization, and the site-curated contaminant/QC catalog.
 
 Start with the [build workflows](workflows.md), then continue with the [API reference](api.md),
-[rule configuration](configuration.md), [CLI guide](cli.md),
+[artifact contracts](artifacts.md), [rule configuration](configuration.md), [CLI guide](cli.md),
 [architecture](architecture.md), or [benchmarks](benchmarks.md).

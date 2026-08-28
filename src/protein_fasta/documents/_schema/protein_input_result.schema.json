@@ -1,0 +1,311 @@
+{
+  "$defs": {
+    "ArtifactDocument": {
+      "additionalProperties": false,
+      "description": "One versioned, checksummed workflow artifact.",
+      "properties": {
+        "byte_count": {
+          "minimum": 0,
+          "title": "Byte Count",
+          "type": "integer"
+        },
+        "checksum": {
+          "minLength": 1,
+          "title": "Checksum",
+          "type": "string"
+        },
+        "checksum_version": {
+          "minLength": 1,
+          "title": "Checksum Version",
+          "type": "string"
+        },
+        "path": {
+          "format": "path",
+          "title": "Path",
+          "type": "string"
+        },
+        "row_count": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Row Count"
+        },
+        "schema_name": {
+          "minLength": 1,
+          "title": "Schema Name",
+          "type": "string"
+        },
+        "schema_version": {
+          "minLength": 1,
+          "title": "Schema Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "schema_name",
+        "schema_version",
+        "path",
+        "checksum_version",
+        "checksum",
+        "byte_count"
+      ],
+      "title": "ArtifactDocument",
+      "type": "object"
+    },
+    "ContaminantProteinSourceDocument": {
+      "additionalProperties": false,
+      "description": "One ordered named contaminant FASTA source.",
+      "properties": {
+        "block_description": {
+          "default": "",
+          "title": "Block Description",
+          "type": "string"
+        },
+        "block_name": {
+          "minLength": 1,
+          "title": "Block Name",
+          "type": "string"
+        },
+        "path": {
+          "format": "path",
+          "title": "Path",
+          "type": "string"
+        },
+        "source_id": {
+          "minLength": 1,
+          "title": "Source Id",
+          "type": "string"
+        },
+        "type": {
+          "const": "contaminant",
+          "default": "contaminant",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "source_id",
+        "path",
+        "block_name"
+      ],
+      "title": "ContaminantProteinSourceDocument",
+      "type": "object"
+    },
+    "ForeignProteinSourceDocument": {
+      "additionalProperties": false,
+      "description": "One ordered foreign source available to entrapment generation.",
+      "properties": {
+        "path": {
+          "format": "path",
+          "title": "Path",
+          "type": "string"
+        },
+        "source_id": {
+          "minLength": 1,
+          "title": "Source Id",
+          "type": "string"
+        },
+        "type": {
+          "const": "foreign",
+          "default": "foreign",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "source_id",
+        "path"
+      ],
+      "title": "ForeignProteinSourceDocument",
+      "type": "object"
+    },
+    "ProteinInputNormalizationDocument": {
+      "additionalProperties": false,
+      "description": "Aggregate sequence changes made while preparing source rows.",
+      "properties": {
+        "terminal_stops_stripped": {
+          "minimum": 0,
+          "title": "Terminal Stops Stripped",
+          "type": "integer"
+        },
+        "upper_cased": {
+          "minimum": 0,
+          "title": "Upper Cased",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "upper_cased",
+        "terminal_stops_stripped"
+      ],
+      "title": "ProteinInputNormalizationDocument",
+      "type": "object"
+    },
+    "ProteinInputRequestDocument": {
+      "additionalProperties": false,
+      "description": "Ordered FASTA sources and destination for one canonical protein input.",
+      "properties": {
+        "output_parquet": {
+          "format": "path",
+          "title": "Output Parquet",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "0.1",
+          "default": "0.1",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "sources": {
+          "items": {
+            "discriminator": {
+              "mapping": {
+                "contaminant": "#/$defs/ContaminantProteinSourceDocument",
+                "foreign": "#/$defs/ForeignProteinSourceDocument",
+                "target": "#/$defs/TargetProteinSourceDocument"
+              },
+              "propertyName": "type"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/$defs/TargetProteinSourceDocument"
+              },
+              {
+                "$ref": "#/$defs/ContaminantProteinSourceDocument"
+              },
+              {
+                "$ref": "#/$defs/ForeignProteinSourceDocument"
+              }
+            ]
+          },
+          "minItems": 1,
+          "title": "Sources",
+          "type": "array"
+        }
+      },
+      "required": [
+        "sources",
+        "output_parquet"
+      ],
+      "title": "ProteinInputRequestDocument",
+      "type": "object"
+    },
+    "ProteinInputSourceEvidenceDocument": {
+      "additionalProperties": false,
+      "description": "Exact source bytes and rows represented in one prepared input.",
+      "properties": {
+        "artifact": {
+          "$ref": "#/$defs/ArtifactDocument"
+        },
+        "role": {
+          "enum": [
+            "target",
+            "contaminant",
+            "foreign"
+          ],
+          "title": "Role",
+          "type": "string"
+        },
+        "source_id": {
+          "title": "Source Id",
+          "type": "string"
+        },
+        "source_order": {
+          "minimum": 0,
+          "title": "Source Order",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "source_id",
+        "source_order",
+        "role",
+        "artifact"
+      ],
+      "title": "ProteinInputSourceEvidenceDocument",
+      "type": "object"
+    },
+    "TargetProteinSourceDocument": {
+      "additionalProperties": false,
+      "description": "One ordered biological target FASTA source.",
+      "properties": {
+        "path": {
+          "format": "path",
+          "title": "Path",
+          "type": "string"
+        },
+        "source_id": {
+          "minLength": 1,
+          "title": "Source Id",
+          "type": "string"
+        },
+        "type": {
+          "const": "target",
+          "default": "target",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "source_id",
+        "path"
+      ],
+      "title": "TargetProteinSourceDocument",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Evidence for one successfully prepared canonical protein input.",
+  "properties": {
+    "effective_request": {
+      "$ref": "#/$defs/ProteinInputRequestDocument"
+    },
+    "normalization": {
+      "$ref": "#/$defs/ProteinInputNormalizationDocument"
+    },
+    "protein_fasta_version": {
+      "title": "Protein Fasta Version",
+      "type": "string"
+    },
+    "protein_input": {
+      "$ref": "#/$defs/ArtifactDocument"
+    },
+    "schema_version": {
+      "const": "0.1",
+      "default": "0.1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "sources": {
+      "items": {
+        "$ref": "#/$defs/ProteinInputSourceEvidenceDocument"
+      },
+      "title": "Sources",
+      "type": "array"
+    },
+    "warnings": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "title": "Warnings",
+      "type": "array"
+    }
+  },
+  "required": [
+    "protein_fasta_version",
+    "effective_request",
+    "protein_input",
+    "sources",
+    "normalization"
+  ],
+  "title": "ProteinInputResultDocument",
+  "type": "object"
+}

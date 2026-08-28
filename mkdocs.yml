@@ -12,6 +12,7 @@ theme:
 nav:
   - Home: index.md
   - Workflows: workflows.md
+  - Artifacts: artifacts.md
   - API: api.md
   - Rules and detection: configuration.md
   - CLI: cli.md

@@ -6,11 +6,12 @@ import datetime
 from enum import StrEnum
 from pathlib import Path
 from string import Formatter
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import Field, model_validator
 
 from protein_fasta.schema.analytics import DigestionDocument
+from protein_fasta.schema.artifacts import ArtifactDocument
 from protein_fasta.schema.base import DocumentBase
 
 
@@ -138,6 +139,39 @@ class EntrapmentDocument(DocumentBase):
     reject_shared_foreign: bool = True
 
 
+class ShuffledEntrapmentDocument(DocumentBase):
+    """Request peptide-shuffled biological entrapment entries."""
+
+    type: Literal["shuffled"] = "shuffled"
+    fold: int = Field(default=1, ge=1, le=10)
+    seed: int = 2000
+    digestion: DigestionDocument = Field(
+        default_factory=lambda: DigestionDocument(missed_cleavages=1)
+    )
+    fix_peptide_n_term: bool = True
+    fix_peptide_c_term: bool = True
+    normalize_i_to_l: bool = False
+
+
+class ForeignSpeciesEntrapmentDocument(DocumentBase):
+    """Request entrapment proteins selected from prepared foreign-source rows."""
+
+    type: Literal["foreign_species"] = "foreign_species"
+    fold: int = Field(default=1, ge=1, le=10)
+    seed: int = 2000
+    digestion: DigestionDocument = Field(
+        default_factory=lambda: DigestionDocument(missed_cleavages=1)
+    )
+    normalize_i_to_l: bool = False
+    reject_shared_foreign: bool = True
+
+
+BiologicalEntrapmentDocument = Annotated[
+    ShuffledEntrapmentDocument | ForeignSpeciesEntrapmentDocument,
+    Field(discriminator="type"),
+]
+
+
 class ContaminantBlockDocument(DocumentBase):
     """One named FASTA source inserted as a marked contaminant block."""
 
@@ -146,56 +180,19 @@ class ContaminantBlockDocument(DocumentBase):
     path: Path
 
 
-class DatabaseBuildDocument(DocumentBase):
-    """Complete reproducible request for one protein database build."""
-
-    schema_version: Literal["0.1"] = "0.1"
-    targets: tuple[Path, ...] = Field(min_length=1)
-    output_dir: Path
-    date: datetime.date
-    name_fields: dict[str, str | int]
-    template: str | None = None
-    naming: NamingDocument = Field(default_factory=NamingDocument)
-    metadata: MetadataDocument = Field(default_factory=MetadataDocument)
-    diagnostics: Path | None = None
-    contaminant_blocks: tuple[ContaminantBlockDocument, ...] = ()
-    decoy: DecoyDocument | None = Field(default_factory=DecoyDocument)
-    entrapment: EntrapmentDocument | None = None
-    foreign_sources: tuple[Path, ...] = ()
-    annotation: str = ""
-    installer: str | None = None
-
-    @model_validator(mode="after")
-    def validate_naming_request(self) -> DatabaseBuildDocument:
-        """Validate the selected template and supplied substitution names eagerly."""
-        selected = self.template or self.naming.default_dbname
-        if selected not in self.naming.dbname:
-            raise ValueError(f"template {selected!r} is not configured in naming.dbname")
-        unsupported = self.name_fields.keys() - set(self.naming.allowed_dbname_fields)
-        if unsupported:
-            raise ValueError(
-                f"name_fields contains unsupported fields: {sorted(unsupported)}; "
-                f"allowed: {sorted(self.naming.allowed_dbname_fields)}"
-            )
-        return self
-
-
 class DatabaseBuildProfileDocument(DocumentBase):
     """Portable defaults shared by a family of protein database builds."""
 
-    schema_version: Literal["0.2"] = "0.2"
+    schema_version: Literal["0.3"] = "0.3"
     naming: NamingDocument = Field(default_factory=NamingDocument)
     metadata: MetadataDocument = Field(default_factory=MetadataDocument)
     diagnostics: Path | None = None
-    default_decoy: DecoyDocument | None = Field(default_factory=DecoyDocument)
-    default_entrapment: EntrapmentDocument | None = None
 
 
 class DatabaseBuildRequestDocument(DocumentBase):
     """Per-run sources, identity, destination, and explicit policy overrides."""
 
-    schema_version: Literal["0.2"] = "0.2"
-    targets: tuple[Path, ...] = Field(min_length=1)
+    schema_version: Literal["0.3"] = "0.3"
     output_dir: Path
     date: datetime.date
     name_fields: dict[str, str | int]
@@ -203,10 +200,7 @@ class DatabaseBuildRequestDocument(DocumentBase):
     naming: NamingDocument | None = None
     metadata: MetadataDocument | None = None
     diagnostics: Path | None = None
-    contaminant_blocks: tuple[ContaminantBlockDocument, ...] = ()
-    decoy: DecoyDocument | None = None
-    entrapment: EntrapmentDocument | None = None
-    foreign_sources: tuple[Path, ...] = ()
+    entrapment: BiologicalEntrapmentDocument | None = None
     annotation: str = ""
     installer: str | None = None
 
@@ -214,8 +208,7 @@ class DatabaseBuildRequestDocument(DocumentBase):
 class EffectiveDatabaseBuildDocument(DocumentBase):
     """Fully resolved and directly replayable protein database build request."""
 
-    schema_version: Literal["0.2"] = "0.2"
-    targets: tuple[Path, ...] = Field(min_length=1)
+    schema_version: Literal["0.3"] = "0.3"
     output_dir: Path
     date: datetime.date
     name_fields: dict[str, str | int]
@@ -223,10 +216,7 @@ class EffectiveDatabaseBuildDocument(DocumentBase):
     naming: NamingDocument
     metadata: MetadataDocument
     diagnostics: Path | None = None
-    contaminant_blocks: tuple[ContaminantBlockDocument, ...] = ()
-    decoy: DecoyDocument | None = None
-    entrapment: EntrapmentDocument | None = None
-    foreign_sources: tuple[Path, ...] = ()
+    entrapment: BiologicalEntrapmentDocument | None = None
     annotation: str = ""
     installer: str | None = None
 
@@ -244,25 +234,12 @@ class EffectiveDatabaseBuildDocument(DocumentBase):
         return self
 
 
-class BuildArtifactDocument(DocumentBase):
-    """One checksummed file participating in a database-build result."""
-
-    schema_name: str
-    schema_version: str
-    path: Path
-    checksum_version: str
-    checksum: str
-    byte_count: int = Field(ge=0)
-    row_count: int | None = Field(default=None, ge=0)
-
-
 class DatabaseBuildCountsDocument(DocumentBase):
     """Mutually reconcilable entry counts for one produced FASTA."""
 
     target: int = Field(ge=0)
     contaminant: int = Field(ge=0)
     entrapment: int = Field(ge=0)
-    decoy: int = Field(ge=0)
     total: int = Field(ge=0)
 
 
@@ -289,17 +266,6 @@ class DatabaseBuildSummaryDocument(DocumentBase):
     aa_frequencies: dict[str, float]
 
 
-class DatabaseBuildDecoyEvidenceDocument(DocumentBase):
-    """Decoy algorithm identity and collision outcomes."""
-
-    mode: str
-    seed: int | None = None
-    initial_collisions: int = Field(ge=0)
-    unresolved_collisions: int = Field(ge=0)
-    dropped_peptides: int = Field(ge=0)
-    omitted_decoys: int = Field(ge=0)
-
-
 class DatabaseBuildEntrapmentEvidenceDocument(DocumentBase):
     """Entrapment strategy identity and achieved multiplicity."""
 
@@ -315,14 +281,16 @@ class DatabaseBuildEntrapmentEvidenceDocument(DocumentBase):
 class DatabaseBuildResultDocument(DocumentBase):
     """Versioned machine-readable evidence for one completed database build."""
 
-    schema_version: Literal["0.2"] = "0.2"
+    schema_version: Literal["0.3"] = "0.3"
     protein_fasta_version: str
     effective_request: EffectiveDatabaseBuildDocument
-    artifacts: tuple[BuildArtifactDocument, ...]
+    input_artifact: ArtifactDocument
+    biological_fasta: ArtifactDocument
+    protein_inventory: ArtifactDocument
+    sidecar_artifacts: tuple[ArtifactDocument, ...] = ()
     counts: DatabaseBuildCountsDocument
     normalization: DatabaseBuildNormalizationDocument
     summary: DatabaseBuildSummaryDocument
-    decoy: DatabaseBuildDecoyEvidenceDocument | None = None
     entrapment: DatabaseBuildEntrapmentEvidenceDocument | None = None
 
 

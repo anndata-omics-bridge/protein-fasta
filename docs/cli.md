@@ -40,45 +40,122 @@ protein-fasta checksum database.fasta
 `md5-file-v1` and normalized ID/sequence-content `blake2b-128-id-sequence-pairs-v1`; the labels are
 part of the result and prevent algorithm ambiguity.
 
+## UniProt catalog and acquisition
+
+Catalog synchronization is an explicit network operation. Filtering an existing catalog is
+local and never refreshes it:
+
+```bash
+protein-fasta uniprot-catalog catalog-request.json
+protein-fasta uniprot-proteomes uniprot-proteomes.parquet proteomes.csv \
+  --query "Homo sapiens"
+head -n 3 proteomes.csv
+```
+
+One download command acquires one source FASTA. It does not prepare, build, add decoys, install,
+or index:
+
+```bash
+protein-fasta uniprot-download human-reviewed.json
+head -n 3 human-reviewed.fasta
+
+protein-fasta uniprot-download human-complete.json
+head -n 3 human-complete.fasta
+
+protein-fasta uniprot-download human-canonical-gene.json
+head -n 3 human-canonical-gene.fasta
+```
+
+The result evidence records the resolved proteome and resolution route, exact provider query,
+all observed release headers, actual and provider-reported counts, checksum, byte size, and any
+release/count warnings.
+
 ## Database construction
 
 ```bash
-protein-fasta build build.json
-protein-fasta build request.json \
+protein-fasta prepare source-selection.json
+protein-fasta build protein-input.parquet biological-build.json
+protein-fasta build protein-input.parquet biological-build.json \
   --profile fgcz.json \
-  --date 2026-08-28 \
-  --decoy reverse
+  --date 2026-08-28
+protein-fasta decoy \
+  build/human.fasta.protein-inventory.parquet \
+  reverse-decoys.json
 ```
 
-The request JSON owns per-run facts; an optional profile JSON owns reusable defaults. Relative
-request paths resolve beside the request file. Precedence is packaged FGCZ profile, explicit
-profile, request, then CLI options that were actually supplied. The command writes the effective
-request before sequence work, a final-order `.fasta.protein-inventory.parquet`, and a
-`.fasta.result.json` afterward with typed artifacts, package version, checksums, counts, summaries,
-normalization changes, and generation evidence.
+`prepare` converts ordered target, contaminant, and optional foreign FASTA sources into the
+canonical protein-input Parquet. `build` owns only biological assembly: targets, contaminant
+blocks, and optional entrapment. `decoy` is a subsequent operation over the completed biological
+inventory and names one required strategy.
 
-A minimal request is:
+Relative parameter-document paths resolve beside that document. Biological precedence is
+packaged FGCZ profile, explicit profile, run request, then CLI values that were actually supplied.
+The effective biological request is written before sequence work. The final result records typed
+artifacts, package version, checksums, counts, complete length/amino-acid summaries,
+normalization, and optional entrapment evidence. Decoy evidence appears only in the separate
+decoy result.
+
+A minimal source preparation is:
 
 ```json
 {
-  "schema_version": "0.2",
-  "targets": ["human.fasta"],
+  "schema_version": "0.1",
+  "sources": [
+    {
+      "type": "target",
+      "source_id": "human-uniprot",
+      "path": "human.fasta"
+    }
+  ],
+  "output_parquet": "protein-input.parquet"
+}
+```
+
+A minimal biological build request is:
+
+```json
+{
+  "schema_version": "0.3",
   "output_dir": "build",
   "date": "2026-08-27",
   "name_fields": {
     "project": 42261,
     "dbn": 1,
     "description": "human"
-  },
-  "decoy": {
-    "mode": "reverse"
   }
 }
 ```
 
-The request can override naming/metadata rules, named contaminant blocks, an explicit
-registry-diagnostic document, shuffled or DecoyPYrat settings, and shuffled or foreign-species
-entrapment settings. Set `"decoy": null` or pass `--decoy none` for a target-only database.
+The build request can override naming, metadata, diagnostics, and shuffled or foreign-species
+entrapment parameters. A reverse-decoy request is independent:
+
+```json
+{
+  "schema_version": "0.1",
+  "output_fasta": "build/human_d.fasta",
+  "decoy_prefix": "REV_",
+  "strategy": {
+    "type": "reverse"
+  }
+}
+```
+
+`derive-input` prepares a new entrapment build from a protein or search inventory, retaining
+existing target and contaminant proteins while excluding previous packaging, entrapment, and
+decoy rows.
+
+## Peptide workflows and decoy diagnostics
+
+```bash
+protein-fasta peptides search-inventory.parquet peptides.json
+protein-fasta pepcompare first-peptides.parquet second-peptides.parquet comparison.json
+protein-fasta decoy-report protein-inventory.parquet decoy-methods.json
+```
+
+`peptides` writes canonical peptide and protein-mapping Parquet plus a unique-peptide FASTA.
+Memory, SQLite, and DuckDB execution use one result contract. `pepcompare` computes exact overlap
+for all, target, contaminant, entrapment, and decoy populations. `decoy-report` compares selected
+decoy algorithms without publishing or registering a search database.
 
 ## Registry indexing and analytics
 
@@ -88,6 +165,14 @@ protein-fasta index databases registry.sqlite3 --recursive
 
 # DuckDB selection is explicit in JSON and agrees with the suffix
 protein-fasta index databases registry.duckdb --config registry.json
+
+# Preferred canonical-artifact handoff
+protein-fasta index-inventory search-inventory.parquet registry.duckdb \
+  --config registry.json
+
+# Read-only comparison before installation
+protein-fasta candidate search-inventory.parquet registry.duckdb candidate.json \
+  --config registry.json
 
 protein-fasta registry registry.sqlite3 databases.csv
 protein-fasta compare registry.sqlite3 12 comparison.xlsx --kind target

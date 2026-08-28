@@ -1,0 +1,22 @@
+{
+  "additionalProperties": false,
+  "description": "Explicit destination for one exact peptide-set comparison.",
+  "properties": {
+    "output_parquet": {
+      "format": "path",
+      "title": "Output Parquet",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "0.1",
+      "default": "0.1",
+      "title": "Schema Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "output_parquet"
+  ],
+  "title": "PeptideComparisonRequestDocument",
+  "type": "object"
+}

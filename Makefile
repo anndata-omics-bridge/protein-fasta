@@ -57,6 +57,9 @@ build:  ## Build, validate, and smoke-test source and wheel distributions
 		--with "$$(printf '%s\n' dist/*.whl)[cli]" \
 		protein-fasta --help
 	uv run --isolated --no-project --no-cache \
+		--with "$$(printf '%s\n' dist/*.whl)[cli,duckdb]" \
+		python scripts/package_smoke.py
+	uv run --isolated --no-project --no-cache \
 		--with 'pytest>=9,<10' \
 		--with "$$(printf '%s\n' dist/*.whl)[cli,duckdb]" \
 		pytest -q \

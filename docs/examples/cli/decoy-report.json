@@ -1,0 +1,16 @@
+{
+  "schema_version": "0.1",
+  "output_parquet": "out/decoy-methods.parquet",
+  "decoy_prefix": "REV_",
+  "digestion": {
+    "enzyme": "trypsin",
+    "min_length": 7,
+    "max_length": 50,
+    "missed_cleavages": 2
+  },
+  "strategies": [
+    {
+      "type": "reverse"
+    }
+  ]
+}

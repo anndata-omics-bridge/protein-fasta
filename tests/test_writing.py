@@ -3,7 +3,7 @@
 from pathlib import Path
 
 from protein_fasta.reading.parser import FastaRecord, read_records
-from protein_fasta.writing import write_records
+from protein_fasta.reading.writer import write_records
 
 
 def test_write_records_wraps_and_round_trips_lexical_values(tmp_path: Path) -> None:

@@ -1,0 +1,329 @@
+{
+  "$defs": {
+    "ArtifactDocument": {
+      "additionalProperties": false,
+      "description": "One versioned, checksummed workflow artifact.",
+      "properties": {
+        "byte_count": {
+          "minimum": 0,
+          "title": "Byte Count",
+          "type": "integer"
+        },
+        "checksum": {
+          "minLength": 1,
+          "title": "Checksum",
+          "type": "string"
+        },
+        "checksum_version": {
+          "minLength": 1,
+          "title": "Checksum Version",
+          "type": "string"
+        },
+        "path": {
+          "format": "path",
+          "title": "Path",
+          "type": "string"
+        },
+        "row_count": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Row Count"
+        },
+        "schema_name": {
+          "minLength": 1,
+          "title": "Schema Name",
+          "type": "string"
+        },
+        "schema_version": {
+          "minLength": 1,
+          "title": "Schema Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "schema_name",
+        "schema_version",
+        "path",
+        "checksum_version",
+        "checksum",
+        "byte_count"
+      ],
+      "title": "ArtifactDocument",
+      "type": "object"
+    },
+    "DigestionDocument": {
+      "additionalProperties": false,
+      "description": "Peptide-length and missed-cleavage limits for one enzyme.",
+      "properties": {
+        "enzyme": {
+          "default": "trypsin",
+          "title": "Enzyme",
+          "type": "string"
+        },
+        "max_length": {
+          "default": 50,
+          "minimum": 1,
+          "title": "Max Length",
+          "type": "integer"
+        },
+        "min_length": {
+          "default": 7,
+          "minimum": 1,
+          "title": "Min Length",
+          "type": "integer"
+        },
+        "missed_cleavages": {
+          "default": 0,
+          "maximum": 2,
+          "minimum": 0,
+          "title": "Missed Cleavages",
+          "type": "integer"
+        }
+      },
+      "title": "DigestionDocument",
+      "type": "object"
+    },
+    "DuckDBPeptideExecutionDocument": {
+      "additionalProperties": false,
+      "description": "Request a temporary DuckDB merge workspace.",
+      "properties": {
+        "partition_size": {
+          "default": 500,
+          "minimum": 1,
+          "title": "Partition Size",
+          "type": "integer"
+        },
+        "type": {
+          "const": "duckdb",
+          "default": "duckdb",
+          "title": "Type",
+          "type": "string"
+        },
+        "workers": {
+          "default": 1,
+          "minimum": 1,
+          "title": "Workers",
+          "type": "integer"
+        }
+      },
+      "title": "DuckDBPeptideExecutionDocument",
+      "type": "object"
+    },
+    "EffectivePeptideBuildDocument": {
+      "additionalProperties": false,
+      "description": "Fully resolved and directly replayable peptide request.",
+      "properties": {
+        "digestion": {
+          "$ref": "#/$defs/DigestionDocument"
+        },
+        "execution": {
+          "discriminator": {
+            "mapping": {
+              "duckdb": "#/$defs/DuckDBPeptideExecutionDocument",
+              "memory": "#/$defs/MemoryPeptideExecutionDocument",
+              "sqlite": "#/$defs/SQLitePeptideExecutionDocument"
+            },
+            "propertyName": "type"
+          },
+          "oneOf": [
+            {
+              "$ref": "#/$defs/MemoryPeptideExecutionDocument"
+            },
+            {
+              "$ref": "#/$defs/SQLitePeptideExecutionDocument"
+            },
+            {
+              "$ref": "#/$defs/DuckDBPeptideExecutionDocument"
+            }
+          ],
+          "title": "Execution"
+        },
+        "mapping_parquet": {
+          "format": "path",
+          "title": "Mapping Parquet",
+          "type": "string"
+        },
+        "peptide_fasta": {
+          "format": "path",
+          "title": "Peptide Fasta",
+          "type": "string"
+        },
+        "peptides_parquet": {
+          "format": "path",
+          "title": "Peptides Parquet",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "0.1",
+          "default": "0.1",
+          "title": "Schema Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "peptides_parquet",
+        "mapping_parquet",
+        "peptide_fasta",
+        "digestion",
+        "execution"
+      ],
+      "title": "EffectivePeptideBuildDocument",
+      "type": "object"
+    },
+    "MemoryPeptideExecutionDocument": {
+      "additionalProperties": false,
+      "description": "Request in-memory deterministic partition merging.",
+      "properties": {
+        "partition_size": {
+          "default": 500,
+          "minimum": 1,
+          "title": "Partition Size",
+          "type": "integer"
+        },
+        "type": {
+          "const": "memory",
+          "default": "memory",
+          "title": "Type",
+          "type": "string"
+        },
+        "workers": {
+          "default": 1,
+          "minimum": 1,
+          "title": "Workers",
+          "type": "integer"
+        }
+      },
+      "title": "MemoryPeptideExecutionDocument",
+      "type": "object"
+    },
+    "PeptideBuildCountsDocument": {
+      "additionalProperties": false,
+      "description": "Unique peptide and protein-mapping counts.",
+      "properties": {
+        "contaminant_peptides": {
+          "minimum": 0,
+          "title": "Contaminant Peptides",
+          "type": "integer"
+        },
+        "decoy_peptides": {
+          "minimum": 0,
+          "title": "Decoy Peptides",
+          "type": "integer"
+        },
+        "entrapment_peptides": {
+          "minimum": 0,
+          "title": "Entrapment Peptides",
+          "type": "integer"
+        },
+        "input_proteins": {
+          "minimum": 0,
+          "title": "Input Proteins",
+          "type": "integer"
+        },
+        "mappings": {
+          "minimum": 0,
+          "title": "Mappings",
+          "type": "integer"
+        },
+        "peptides": {
+          "minimum": 0,
+          "title": "Peptides",
+          "type": "integer"
+        },
+        "target_peptides": {
+          "minimum": 0,
+          "title": "Target Peptides",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "input_proteins",
+        "peptides",
+        "mappings",
+        "target_peptides",
+        "contaminant_peptides",
+        "entrapment_peptides",
+        "decoy_peptides"
+      ],
+      "title": "PeptideBuildCountsDocument",
+      "type": "object"
+    },
+    "SQLitePeptideExecutionDocument": {
+      "additionalProperties": false,
+      "description": "Request a temporary SQLite merge workspace.",
+      "properties": {
+        "partition_size": {
+          "default": 500,
+          "minimum": 1,
+          "title": "Partition Size",
+          "type": "integer"
+        },
+        "type": {
+          "const": "sqlite",
+          "default": "sqlite",
+          "title": "Type",
+          "type": "string"
+        },
+        "workers": {
+          "default": 1,
+          "minimum": 1,
+          "title": "Workers",
+          "type": "integer"
+        }
+      },
+      "title": "SQLitePeptideExecutionDocument",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Checksummed evidence for one protein-to-peptide build.",
+  "properties": {
+    "counts": {
+      "$ref": "#/$defs/PeptideBuildCountsDocument"
+    },
+    "effective_request": {
+      "$ref": "#/$defs/EffectivePeptideBuildDocument"
+    },
+    "peptide_fasta": {
+      "$ref": "#/$defs/ArtifactDocument"
+    },
+    "peptides": {
+      "$ref": "#/$defs/ArtifactDocument"
+    },
+    "protein_fasta_version": {
+      "title": "Protein Fasta Version",
+      "type": "string"
+    },
+    "protein_inventory": {
+      "$ref": "#/$defs/ArtifactDocument"
+    },
+    "protein_peptide_mapping": {
+      "$ref": "#/$defs/ArtifactDocument"
+    },
+    "schema_version": {
+      "const": "0.1",
+      "default": "0.1",
+      "title": "Schema Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "protein_fasta_version",
+    "effective_request",
+    "protein_inventory",
+    "peptides",
+    "protein_peptide_mapping",
+    "peptide_fasta",
+    "counts"
+  ],
+  "title": "PeptideBuildResultDocument",
+  "type": "object"
+}

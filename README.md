@@ -6,7 +6,9 @@
 - an optional Polars frame reader that enriches homogeneous UniProtKB or RefSeq files from
   Pydantic-validated JSON rules;
 - backend-free hashing, digestion, comparison, and clustering analytics;
-- reproducible database construction with configured naming, metadata, decoys, and entrapment;
+- reproducible source preparation, biological construction, and subsequent decoy generation;
+- canonical peptide construction and comparison with memory, SQLite, or DuckDB execution;
+- reproducible UniProt proteome catalogs and FASTA acquisition;
 - SQLite or optional DuckDB indexing with materialized pair metrics; and
 - a short, single-word Cyclopts command surface for each reproducible operation.
 
@@ -97,8 +99,12 @@ protein-fasta formats database.fasta formats.csv
 protein-fasta diagnostics database.fasta
 protein-fasta digest database.fasta peptides.parquet
 protein-fasta checksum database.fasta
-protein-fasta build build.json
+protein-fasta prepare source-selection.json
+protein-fasta build protein-input.parquet biological-build.json
+protein-fasta decoy biological.fasta.protein-inventory.parquet reverse-decoys.json
+protein-fasta peptides search-inventory.parquet peptides.json
 protein-fasta index databases registry.sqlite3
+protein-fasta index-inventory search-inventory.parquet registry.duckdb --config registry.json
 protein-fasta registry registry.sqlite3 databases.csv
 protein-fasta compare registry.sqlite3 12 comparison.csv
 protein-fasta pairs registry.sqlite3 pairs.tsv
@@ -112,9 +118,9 @@ registry indexing, database comparisons, materialized pair exports, and clusteri
 [API reference](docs/api.md), and maintained
 [architecture](docs/architecture.md).
 
-The package excludes the curated contaminant/QC catalog, GUI installation workflows, UniProt
-download at this stage, peptide-to-protein matching, protein inference, and AnnData/MuData
-persistence.
+The package excludes site-specific curated contaminant/QC catalogs, GUI installation workflows,
+protein inference, and AnnData/MuData persistence. Those consumers compose the typed artifacts and
+APIs without owning FASTA, decoy, peptide, UniProt, or registry computation.
 
 ## Development
 

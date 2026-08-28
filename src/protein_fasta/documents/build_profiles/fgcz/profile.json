@@ -1,5 +1,5 @@
 {
-  "schema_version": "0.2",
+  "schema_version": "0.3",
   "naming": {
     "default_dbname": "project",
     "allowed_dbname_fields": ["project", "dbn", "description", "taxid"],
@@ -37,16 +37,5 @@
     "installer": "",
     "org": "fgcz"
   },
-  "diagnostics": null,
-  "default_decoy": {
-    "mode": "reverse",
-    "seed": 2000,
-    "digestion": {
-      "enzyme": "trypsin",
-      "missed_cleavages": 0,
-      "min_length": 7,
-      "max_length": 50
-    }
-  },
-  "default_entrapment": null
+  "diagnostics": null
 }

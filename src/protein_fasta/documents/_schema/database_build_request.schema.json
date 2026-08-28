@@ -1,62 +1,5 @@
 {
   "$defs": {
-    "ContaminantBlockDocument": {
-      "additionalProperties": false,
-      "description": "One named FASTA source inserted as a marked contaminant block.",
-      "properties": {
-        "description": {
-          "default": "",
-          "title": "Description",
-          "type": "string"
-        },
-        "name": {
-          "minLength": 1,
-          "title": "Name",
-          "type": "string"
-        },
-        "path": {
-          "format": "path",
-          "title": "Path",
-          "type": "string"
-        }
-      },
-      "required": [
-        "name",
-        "path"
-      ],
-      "title": "ContaminantBlockDocument",
-      "type": "object"
-    },
-    "DecoyDocument": {
-      "additionalProperties": false,
-      "description": "Validated decoy mode, stochastic seed, and collision digestion.",
-      "properties": {
-        "digestion": {
-          "$ref": "#/$defs/DigestionDocument"
-        },
-        "mode": {
-          "$ref": "#/$defs/DecoyMode",
-          "default": "reverse"
-        },
-        "seed": {
-          "default": 2000,
-          "title": "Seed",
-          "type": "integer"
-        }
-      },
-      "title": "DecoyDocument",
-      "type": "object"
-    },
-    "DecoyMode": {
-      "description": "Supported protein-decoy generation algorithms.",
-      "enum": [
-        "reverse",
-        "shuffle",
-        "decoypyrat"
-      ],
-      "title": "DecoyMode",
-      "type": "string"
-    },
     "DescriptionDocument": {
       "additionalProperties": false,
       "description": "Rules for deriving a compact database-description token.",
@@ -104,22 +47,12 @@
       "title": "DigestionDocument",
       "type": "object"
     },
-    "EntrapmentDocument": {
+    "ForeignSpeciesEntrapmentDocument": {
       "additionalProperties": false,
-      "description": "Entrapment strategy, multiplicity, seed, and collision digestion.",
+      "description": "Request entrapment proteins selected from prepared foreign-source rows.",
       "properties": {
         "digestion": {
           "$ref": "#/$defs/DigestionDocument"
-        },
-        "fix_peptide_c_term": {
-          "default": true,
-          "title": "Fix Peptide C Term",
-          "type": "boolean"
-        },
-        "fix_peptide_n_term": {
-          "default": true,
-          "title": "Fix Peptide N Term",
-          "type": "boolean"
         },
         "fold": {
           "default": 1,
@@ -143,22 +76,15 @@
           "title": "Seed",
           "type": "integer"
         },
-        "strategy": {
-          "$ref": "#/$defs/EntrapmentStrategy",
-          "default": "shuffled"
+        "type": {
+          "const": "foreign_species",
+          "default": "foreign_species",
+          "title": "Type",
+          "type": "string"
         }
       },
-      "title": "EntrapmentDocument",
+      "title": "ForeignSpeciesEntrapmentDocument",
       "type": "object"
-    },
-    "EntrapmentStrategy": {
-      "description": "Supported entrapment generation algorithms.",
-      "enum": [
-        "shuffled",
-        "foreign-species"
-      ],
-      "title": "EntrapmentStrategy",
-      "type": "string"
     },
     "MetadataDocument": {
       "additionalProperties": false,
@@ -275,6 +201,50 @@
       },
       "title": "NamingDocument",
       "type": "object"
+    },
+    "ShuffledEntrapmentDocument": {
+      "additionalProperties": false,
+      "description": "Request peptide-shuffled biological entrapment entries.",
+      "properties": {
+        "digestion": {
+          "$ref": "#/$defs/DigestionDocument"
+        },
+        "fix_peptide_c_term": {
+          "default": true,
+          "title": "Fix Peptide C Term",
+          "type": "boolean"
+        },
+        "fix_peptide_n_term": {
+          "default": true,
+          "title": "Fix Peptide N Term",
+          "type": "boolean"
+        },
+        "fold": {
+          "default": 1,
+          "maximum": 10,
+          "minimum": 1,
+          "title": "Fold",
+          "type": "integer"
+        },
+        "normalize_i_to_l": {
+          "default": false,
+          "title": "Normalize I To L",
+          "type": "boolean"
+        },
+        "seed": {
+          "default": 2000,
+          "title": "Seed",
+          "type": "integer"
+        },
+        "type": {
+          "const": "shuffled",
+          "default": "shuffled",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "title": "ShuffledEntrapmentDocument",
+      "type": "object"
     }
   },
   "additionalProperties": false,
@@ -285,29 +255,10 @@
       "title": "Annotation",
       "type": "string"
     },
-    "contaminant_blocks": {
-      "default": [],
-      "items": {
-        "$ref": "#/$defs/ContaminantBlockDocument"
-      },
-      "title": "Contaminant Blocks",
-      "type": "array"
-    },
     "date": {
       "format": "date",
       "title": "Date",
       "type": "string"
-    },
-    "decoy": {
-      "anyOf": [
-        {
-          "$ref": "#/$defs/DecoyDocument"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null
     },
     "diagnostics": {
       "anyOf": [
@@ -325,22 +276,28 @@
     "entrapment": {
       "anyOf": [
         {
-          "$ref": "#/$defs/EntrapmentDocument"
+          "discriminator": {
+            "mapping": {
+              "foreign_species": "#/$defs/ForeignSpeciesEntrapmentDocument",
+              "shuffled": "#/$defs/ShuffledEntrapmentDocument"
+            },
+            "propertyName": "type"
+          },
+          "oneOf": [
+            {
+              "$ref": "#/$defs/ShuffledEntrapmentDocument"
+            },
+            {
+              "$ref": "#/$defs/ForeignSpeciesEntrapmentDocument"
+            }
+          ]
         },
         {
           "type": "null"
         }
       ],
-      "default": null
-    },
-    "foreign_sources": {
-      "default": [],
-      "items": {
-        "format": "path",
-        "type": "string"
-      },
-      "title": "Foreign Sources",
-      "type": "array"
+      "default": null,
+      "title": "Entrapment"
     },
     "installer": {
       "anyOf": [
@@ -396,19 +353,10 @@
       "type": "string"
     },
     "schema_version": {
-      "const": "0.2",
-      "default": "0.2",
+      "const": "0.3",
+      "default": "0.3",
       "title": "Schema Version",
       "type": "string"
-    },
-    "targets": {
-      "items": {
-        "format": "path",
-        "type": "string"
-      },
-      "minItems": 1,
-      "title": "Targets",
-      "type": "array"
     },
     "template": {
       "anyOf": [
@@ -424,7 +372,6 @@
     }
   },
   "required": [
-    "targets",
     "output_dir",
     "date",
     "name_fields"

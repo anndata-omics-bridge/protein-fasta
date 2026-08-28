@@ -1,0 +1,8 @@
+{
+  "schema_version": "0.1",
+  "output_fasta": "out/p1_db1_walkthrough_d_20260827.fasta",
+  "decoy_prefix": "REV_",
+  "strategy": {
+    "type": "reverse"
+  }
+}

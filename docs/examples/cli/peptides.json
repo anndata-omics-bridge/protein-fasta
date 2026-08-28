@@ -1,0 +1,17 @@
+{
+  "schema_version": "0.1",
+  "peptides_parquet": "out/peptides.parquet",
+  "mapping_parquet": "out/protein-peptide-map.parquet",
+  "peptide_fasta": "out/peptides.fasta",
+  "digestion": {
+    "enzyme": "trypsin",
+    "min_length": 7,
+    "max_length": 50,
+    "missed_cleavages": 2
+  },
+  "execution": {
+    "type": "memory",
+    "workers": 1,
+    "partition_size": 25
+  }
+}

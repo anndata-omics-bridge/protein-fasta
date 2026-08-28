@@ -1,0 +1,261 @@
+{
+  "$defs": {
+    "ArtifactDocument": {
+      "additionalProperties": false,
+      "description": "One versioned, checksummed workflow artifact.",
+      "properties": {
+        "byte_count": {
+          "minimum": 0,
+          "title": "Byte Count",
+          "type": "integer"
+        },
+        "checksum": {
+          "minLength": 1,
+          "title": "Checksum",
+          "type": "string"
+        },
+        "checksum_version": {
+          "minLength": 1,
+          "title": "Checksum Version",
+          "type": "string"
+        },
+        "path": {
+          "format": "path",
+          "title": "Path",
+          "type": "string"
+        },
+        "row_count": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Row Count"
+        },
+        "schema_name": {
+          "minLength": 1,
+          "title": "Schema Name",
+          "type": "string"
+        },
+        "schema_version": {
+          "minLength": 1,
+          "title": "Schema Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "schema_name",
+        "schema_version",
+        "path",
+        "checksum_version",
+        "checksum",
+        "byte_count"
+      ],
+      "title": "ArtifactDocument",
+      "type": "object"
+    },
+    "DecoyPyratDocument": {
+      "additionalProperties": false,
+      "description": "Request digestion-aware DecoyPYrat generation.",
+      "properties": {
+        "digestion": {
+          "$ref": "#/$defs/DigestionDocument"
+        },
+        "seed": {
+          "title": "Seed",
+          "type": "integer"
+        },
+        "type": {
+          "const": "decoypyrat",
+          "default": "decoypyrat",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "seed"
+      ],
+      "title": "DecoyPyratDocument",
+      "type": "object"
+    },
+    "DigestionDocument": {
+      "additionalProperties": false,
+      "description": "Peptide-length and missed-cleavage limits for one enzyme.",
+      "properties": {
+        "enzyme": {
+          "default": "trypsin",
+          "title": "Enzyme",
+          "type": "string"
+        },
+        "max_length": {
+          "default": 50,
+          "minimum": 1,
+          "title": "Max Length",
+          "type": "integer"
+        },
+        "min_length": {
+          "default": 7,
+          "minimum": 1,
+          "title": "Min Length",
+          "type": "integer"
+        },
+        "missed_cleavages": {
+          "default": 0,
+          "maximum": 2,
+          "minimum": 0,
+          "title": "Missed Cleavages",
+          "type": "integer"
+        }
+      },
+      "title": "DigestionDocument",
+      "type": "object"
+    },
+    "EffectiveDecoyReportDocument": {
+      "additionalProperties": false,
+      "description": "Fully resolved and replayable decoy-method report request.",
+      "properties": {
+        "decoy_prefix": {
+          "minLength": 1,
+          "title": "Decoy Prefix",
+          "type": "string"
+        },
+        "digestion": {
+          "$ref": "#/$defs/DigestionDocument"
+        },
+        "output_parquet": {
+          "format": "path",
+          "title": "Output Parquet",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "0.1",
+          "default": "0.1",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "strategies": {
+          "items": {
+            "discriminator": {
+              "mapping": {
+                "decoypyrat": "#/$defs/DecoyPyratDocument",
+                "reverse": "#/$defs/ReverseDecoyDocument",
+                "shuffle": "#/$defs/ShuffleDecoyDocument"
+              },
+              "propertyName": "type"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/$defs/ReverseDecoyDocument"
+              },
+              {
+                "$ref": "#/$defs/ShuffleDecoyDocument"
+              },
+              {
+                "$ref": "#/$defs/DecoyPyratDocument"
+              }
+            ]
+          },
+          "title": "Strategies",
+          "type": "array"
+        }
+      },
+      "required": [
+        "output_parquet",
+        "decoy_prefix",
+        "digestion",
+        "strategies"
+      ],
+      "title": "EffectiveDecoyReportDocument",
+      "type": "object"
+    },
+    "ReverseDecoyDocument": {
+      "additionalProperties": false,
+      "description": "Request deterministic whole-protein reversal.",
+      "properties": {
+        "type": {
+          "const": "reverse",
+          "default": "reverse",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "title": "ReverseDecoyDocument",
+      "type": "object"
+    },
+    "ShuffleDecoyDocument": {
+      "additionalProperties": false,
+      "description": "Request deterministic seeded whole-protein shuffling.",
+      "properties": {
+        "seed": {
+          "title": "Seed",
+          "type": "integer"
+        },
+        "type": {
+          "const": "shuffle",
+          "default": "shuffle",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "seed"
+      ],
+      "title": "ShuffleDecoyDocument",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Checksummed evidence for one completed decoy-method comparison.",
+  "properties": {
+    "biological_inventory": {
+      "$ref": "#/$defs/ArtifactDocument"
+    },
+    "comparison": {
+      "$ref": "#/$defs/ArtifactDocument"
+    },
+    "effective_request": {
+      "$ref": "#/$defs/EffectiveDecoyReportDocument"
+    },
+    "protein_fasta_version": {
+      "title": "Protein Fasta Version",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "0.1",
+      "default": "0.1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "target_peptides": {
+      "minimum": 0,
+      "title": "Target Peptides",
+      "type": "integer"
+    },
+    "target_proteins": {
+      "minimum": 0,
+      "title": "Target Proteins",
+      "type": "integer"
+    },
+    "target_unique_peptides": {
+      "minimum": 0,
+      "title": "Target Unique Peptides",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "protein_fasta_version",
+    "effective_request",
+    "biological_inventory",
+    "comparison",
+    "target_proteins",
+    "target_peptides",
+    "target_unique_peptides"
+  ],
+  "title": "DecoyReportResultDocument",
+  "type": "object"
+}

@@ -10,10 +10,12 @@ from pydantic import BaseModel, ValidationError
 
 from protein_fasta.schema.analytics import DigestionDocument, EnzymeDocument
 from protein_fasta.schema.build import (
-    DatabaseBuildDocument,
     DatabaseBuildProfileDocument,
     DatabaseBuildRequestDocument,
 )
+from protein_fasta.schema.candidate import CandidateRequestDocument
+from protein_fasta.schema.decoy import DecoyRequestDocument
+from protein_fasta.schema.decoy_report import DecoyReportRequestDocument
 from protein_fasta.schema.diagnostics import (
     DiagnosticDocument,
     EntryClassifierCatalogDocument,
@@ -22,7 +24,19 @@ from protein_fasta.schema.frame_formats import (
     HeaderFormatCatalogDocument,
     HeaderFormatDocument,
 )
+from protein_fasta.schema.peptide import (
+    PeptideBuildRequestDocument,
+    PeptideComparisonRequestDocument,
+)
+from protein_fasta.schema.protein_input import (
+    DerivedProteinInputRequestDocument,
+    ProteinInputRequestDocument,
+)
 from protein_fasta.schema.registry import RegistryDocument
+from protein_fasta.schema.uniprot import (
+    UniProtCatalogRequestDocument,
+    UniProtDownloadRequestDocument,
+)
 
 _PACKAGE_DOCUMENTS = resources.files("protein_fasta").joinpath("documents")
 
@@ -68,11 +82,6 @@ def load_registry_document(path: Path, /) -> RegistryDocument:
     return _load_path(path, RegistryDocument)
 
 
-def load_database_build_document(path: Path, /) -> DatabaseBuildDocument:
-    """Load one complete database-build request from an explicit JSON path."""
-    return _load_path(path, DatabaseBuildDocument)
-
-
 def load_database_build_profile(path: Path, /) -> DatabaseBuildProfileDocument:
     """Load one portable database-build profile from an explicit JSON path."""
     return _load_path(path, DatabaseBuildProfileDocument)
@@ -81,6 +90,51 @@ def load_database_build_profile(path: Path, /) -> DatabaseBuildProfileDocument:
 def load_database_build_request(path: Path, /) -> DatabaseBuildRequestDocument:
     """Load one per-run database-build request from an explicit JSON path."""
     return _load_path(path, DatabaseBuildRequestDocument)
+
+
+def load_protein_input_request(path: Path, /) -> ProteinInputRequestDocument:
+    """Load one ordered protein-input preparation request."""
+    return _load_path(path, ProteinInputRequestDocument)
+
+
+def load_derived_protein_input_request(path: Path, /) -> DerivedProteinInputRequestDocument:
+    """Load one inventory-to-protein-input derivation request."""
+    return _load_path(path, DerivedProteinInputRequestDocument)
+
+
+def load_decoy_request(path: Path, /) -> DecoyRequestDocument:
+    """Load one inventory-to-search-database decoy request."""
+    return _load_path(path, DecoyRequestDocument)
+
+
+def load_decoy_report_request(path: Path, /) -> DecoyReportRequestDocument:
+    """Load one peptide-level decoy-method report request."""
+    return _load_path(path, DecoyReportRequestDocument)
+
+
+def load_candidate_request(path: Path, /) -> CandidateRequestDocument:
+    """Load one read-only candidate-review request."""
+    return _load_path(path, CandidateRequestDocument)
+
+
+def load_peptide_build_request(path: Path, /) -> PeptideBuildRequestDocument:
+    """Load one protein-inventory to peptide-database request."""
+    return _load_path(path, PeptideBuildRequestDocument)
+
+
+def load_peptide_comparison_request(path: Path, /) -> PeptideComparisonRequestDocument:
+    """Load one exact peptide-comparison request."""
+    return _load_path(path, PeptideComparisonRequestDocument)
+
+
+def load_uniprot_catalog_request(path: Path, /) -> UniProtCatalogRequestDocument:
+    """Load one UniProt catalog request from an explicit JSON path."""
+    return _load_path(path, UniProtCatalogRequestDocument)
+
+
+def load_uniprot_download_request(path: Path, /) -> UniProtDownloadRequestDocument:
+    """Load one UniProt download request from an explicit JSON path."""
+    return _load_path(path, UniProtDownloadRequestDocument)
 
 
 def load_builtin_database_build_profile(name: str = "fgcz", /) -> DatabaseBuildProfileDocument:

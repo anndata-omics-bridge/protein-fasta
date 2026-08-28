@@ -5,7 +5,6 @@ from __future__ import annotations
 import datetime
 import sys
 from collections.abc import Callable
-from dataclasses import dataclass
 from pathlib import Path
 
 import polars as pl
@@ -22,13 +21,22 @@ from protein_fasta.analytics.hashing import (
     sequence_hash,
 )
 from protein_fasta.analytics_compile import make_digestion
+from protein_fasta.candidate_analysis import (
+    resolve_candidate_request,
+    run_candidate_analysis,
+)
 from protein_fasta.compile import make_diagnostic_rules
 from protein_fasta.database_build import (
-    BuildDecoyOverride,
     DatabaseBuildOverrides,
     resolve_database_build,
     run_database_build,
 )
+from protein_fasta.decoy_database import (
+    DecoyOverrides,
+    resolve_decoy_request,
+    run_decoy_generation,
+)
+from protein_fasta.decoy_report import resolve_decoy_report_request, run_decoy_report
 from protein_fasta.diagnostic_summary import (
     ProteinDiagnosticsSummary,
     summarize_protein_diagnostics,
@@ -38,12 +46,21 @@ from protein_fasta.documents import (
     load_builtin_diagnostic_document,
     load_builtin_entry_classifier_document,
     load_builtin_header_format_catalog,
+    load_candidate_request,
     load_database_build_profile,
     load_database_build_request,
+    load_decoy_report_request,
+    load_decoy_request,
+    load_derived_protein_input_request,
     load_digestion_document,
     load_entry_classifier_document,
     load_header_format_catalog,
+    load_peptide_build_request,
+    load_peptide_comparison_request,
+    load_protein_input_request,
     load_registry_document,
+    load_uniprot_catalog_request,
+    load_uniprot_download_request,
 )
 from protein_fasta.frame import (
     read_basic_protein_frame,
@@ -52,6 +69,18 @@ from protein_fasta.frame import (
     read_protein_frame,
     read_strict_configured_protein_frame,
     read_strict_protein_frame,
+)
+from protein_fasta.peptide_workflow import (
+    resolve_peptide_build_request,
+    resolve_peptide_comparison_request,
+    run_peptide_build,
+    run_peptide_comparison,
+)
+from protein_fasta.protein_input import (
+    resolve_derived_protein_input_request,
+    resolve_protein_input_request,
+    run_derived_protein_input_preparation,
+    run_protein_input_preparation,
 )
 from protein_fasta.record import iter_protein_diagnostics, iter_proteins
 from protein_fasta.registry.backend import factory as registry_backends
@@ -67,11 +96,23 @@ from protein_fasta.registry.indexing import (
     connect_registry,
     list_databases,
     rebuild_registry,
+    update_registry,
 )
 from protein_fasta.registry.kinds import EntryKind
+from protein_fasta.registry_workflow import index_database_inventory, make_registry_settings
 from protein_fasta.schema.analytics import DigestionDocument
-from protein_fasta.schema.build import MetadataDocument, NamingDocument
-from protein_fasta.schema.registry import RegistryBackendDocument, RegistryDocument
+from protein_fasta.schema.registry import RegistryDocument
+from protein_fasta.schema.uniprot import UniProtCatalogRequestDocument
+from protein_fasta.uniprot_catalog import (
+    filter_uniprot_catalog,
+    read_uniprot_catalog,
+    sync_uniprot_catalog,
+)
+from protein_fasta.uniprot_download import (
+    UniProtDownloadOverrides,
+    resolve_uniprot_download,
+    run_uniprot_download,
+)
 
 type _TableWriter = Callable[[pl.DataFrame, Path], None]
 
@@ -106,48 +147,17 @@ _WRITERS: dict[str, _TableWriter] = {
 }
 
 
-@dataclass(frozen=True, slots=True)
-class _RegistrySettings:
-    """Concrete operation settings compiled from one portable JSON document."""
-
-    fasta_root: Path
-    registry_dir: Path
-    registry: RegistryBackendDocument
-    max_fasta_file_size_gib: float
-    max_detailed_entries: int
-    metadata_aa_sample_size: int
-    min_fasta_date: datetime.date | None
-    overlap_threshold: float
-    naming: NamingDocument
-    sentinel: MetadataDocument
-    registry_diagnostics_path: Path | None = None
-
-
-def _registry_settings(
-    document: RegistryDocument,
-    fasta_root: Path,
-    registry_path: Path,
-) -> _RegistrySettings:
-    return _RegistrySettings(
-        fasta_root=fasta_root,
-        registry_dir=registry_path.parent,
-        registry=document.registry,
-        max_fasta_file_size_gib=document.max_fasta_file_size_gib,
-        max_detailed_entries=document.max_detailed_entries,
-        metadata_aa_sample_size=document.metadata_aa_sample_size,
-        min_fasta_date=document.min_fasta_date,
-        overlap_threshold=document.overlap_threshold,
-        naming=document.naming,
-        sentinel=document.metadata,
-    )
-
-
 def _writer_for(path: Path) -> _TableWriter:
     writer = _WRITERS.get(path.suffix.lower())
     if writer is None:
         supported = ", ".join(sorted(_WRITERS))
         raise ValueError(f"unsupported table suffix {path.suffix!r}; choose one of: {supported}")
     return writer
+
+
+def _cli_path(path: Path, /) -> Path:
+    """Resolve one command-line path against the caller's working directory."""
+    return path.resolve()
 
 
 def _export_frame(
@@ -400,6 +410,47 @@ def digest(
 
 
 @app.command
+def peptides(inventory_path: Path, request_path: Path) -> None:
+    """Build canonical peptide, mapping, and unique FASTA artifacts.
+
+    Args:
+        inventory_path: Canonical biological or search inventory Parquet.
+        request_path: Peptide-build request JSON.
+    """
+    effective = resolve_peptide_build_request(
+        load_peptide_build_request(request_path),
+        request_base=request_path.resolve().parent,
+    )
+    execution = run_peptide_build(_cli_path(inventory_path), effective)
+    logger.info("Wrote peptide-build evidence to {}", execution.result_path)
+
+
+@app.command
+def pepcompare(
+    peptides_a: Path,
+    peptides_b: Path,
+    request_path: Path,
+) -> None:
+    """Compare two canonical peptide inventories exactly.
+
+    Args:
+        peptides_a: First canonical peptides Parquet.
+        peptides_b: Second canonical peptides Parquet.
+        request_path: Peptide-comparison request JSON.
+    """
+    effective = resolve_peptide_comparison_request(
+        load_peptide_comparison_request(request_path),
+        request_base=request_path.resolve().parent,
+    )
+    execution = run_peptide_comparison(
+        _cli_path(peptides_a),
+        _cli_path(peptides_b),
+        effective,
+    )
+    logger.info("Wrote peptide-comparison evidence to {}", execution.result_path)
+
+
+@app.command
 def checksum(fasta_path: Path) -> None:
     """Report exact-file MD5 and normalized protein-content BLAKE2b fingerprints.
 
@@ -418,26 +469,188 @@ def checksum(fasta_path: Path) -> None:
     )
 
 
+@app.command(name="uniprot-catalog")
+def uniprot_catalog(
+    request_path: Path,
+    *,
+    output_dir: Path | None = None,
+    timeout_seconds: float | None = None,
+) -> None:
+    """Synchronize one immutable local UniProt proteome-catalog snapshot.
+
+    Args:
+        request_path: UniProt catalog request JSON.
+        output_dir: Optional explicit output-directory override.
+        timeout_seconds: Optional HTTP timeout override.
+    """
+    request = load_uniprot_catalog_request(request_path)
+    updates: dict[str, object] = {}
+    if output_dir is not None:
+        updates["output_dir"] = _cli_path(output_dir)
+    if timeout_seconds is not None:
+        updates["timeout_seconds"] = timeout_seconds
+    if updates:
+        request = UniProtCatalogRequestDocument.model_validate(request.model_dump() | updates)
+    execution = sync_uniprot_catalog(
+        request,
+        request_base=request_path.resolve().parent,
+    )
+    logger.info(
+        "Wrote {} UniProt proteomes to {}",
+        execution.frame.height,
+        execution.catalog_path,
+    )
+    logger.info("Wrote catalog evidence to {}", execution.result_path)
+
+
+@app.command(name="uniprot-proteomes")
+def uniprot_proteomes(
+    catalog_path: Path,
+    table_path: Path,
+    *,
+    query: str = "",
+) -> None:
+    """Filter one local UniProt catalog without contacting the provider.
+
+    Args:
+        catalog_path: Existing canonical UniProt catalog Parquet.
+        table_path: CSV, TSV, XLSX, or Parquet output.
+        query: Optional case-insensitive proteome, organism, or taxid filter.
+    """
+    frame = filter_uniprot_catalog(read_uniprot_catalog(catalog_path), query)
+    _writer_for(table_path)(frame, table_path)
+    logger.info("Wrote {} UniProt proteomes to {}", frame.height, table_path)
+
+
+@app.command(name="uniprot-download")
+def uniprot_download(
+    request_path: Path,
+    *,
+    output_fasta: Path | None = None,
+    timeout_seconds: float | None = None,
+) -> None:
+    """Acquire one UniProt proteome FASTA without building or adding decoys.
+
+    Args:
+        request_path: UniProt download request JSON.
+        output_fasta: Optional explicit FASTA destination override.
+        timeout_seconds: Optional HTTP timeout override.
+    """
+    request = load_uniprot_download_request(request_path)
+    effective = resolve_uniprot_download(
+        request,
+        request_base=request_path.resolve().parent,
+        overrides=UniProtDownloadOverrides(
+            output_fasta=None if output_fasta is None else _cli_path(output_fasta),
+            timeout_seconds=timeout_seconds,
+        ),
+    )
+    execution = run_uniprot_download(effective)
+    logger.info("Wrote UniProt download evidence to {}", execution.result_path)
+
+
+@app.command
+def prepare(request_path: Path) -> None:
+    """Prepare ordered FASTA sources as the canonical protein-input Parquet.
+
+    Args:
+        request_path: Protein-input request JSON containing source roles and output path.
+    """
+    request = load_protein_input_request(request_path)
+    effective = resolve_protein_input_request(
+        request,
+        request_base=request_path.resolve().parent,
+    )
+    execution = run_protein_input_preparation(effective)
+    logger.info("Wrote protein-input evidence to {}", execution.result_path)
+
+
+@app.command(name="derive-input")
+def derive_input(request_path: Path) -> None:
+    """Prepare clean source rows from an existing biological or search inventory.
+
+    The source retains target and contaminant proteins. Existing sentinel,
+    section-marker, entrapment, and decoy rows are excluded. An optional second
+    inventory supplies foreign proteins for a subsequent entrapment build.
+
+    Args:
+        request_path: Derived protein-input request JSON with inventory paths and output.
+    """
+    request = load_derived_protein_input_request(request_path)
+    effective = resolve_derived_protein_input_request(
+        request,
+        request_base=request_path.resolve().parent,
+    )
+    execution = run_derived_protein_input_preparation(effective)
+    logger.info("Wrote derived protein-input evidence to {}", execution.result_path)
+
+
+@app.command
+def decoy(
+    biological_inventory: Path,
+    request_path: Path,
+    *,
+    output_fasta: Path | None = None,
+    decoy_prefix: str | None = None,
+) -> None:
+    """Generate one search database from a biological protein inventory.
+
+    Args:
+        biological_inventory: Existing decoy-free protein-inventory Parquet.
+        request_path: Decoy request JSON containing exactly one strategy.
+        output_fasta: Optional explicit search-FASTA destination override.
+        decoy_prefix: Optional explicit generated-header prefix override.
+    """
+    request = load_decoy_request(request_path)
+    effective = resolve_decoy_request(
+        request,
+        request_base=request_path.resolve().parent,
+        overrides=DecoyOverrides(
+            output_fasta=None if output_fasta is None else _cli_path(output_fasta),
+            decoy_prefix=decoy_prefix,
+        ),
+    )
+    execution = run_decoy_generation(_cli_path(biological_inventory), effective)
+    logger.info("Wrote decoy-generation evidence to {}", execution.result_path)
+
+
+@app.command(name="decoy-report")
+def decoy_report(biological_inventory: Path, request_path: Path) -> None:
+    """Compare requested decoy methods at peptide level.
+
+    Args:
+        biological_inventory: Existing decoy-free protein-inventory Parquet.
+        request_path: Decoy-method comparison request JSON.
+    """
+    effective = resolve_decoy_report_request(
+        load_decoy_report_request(request_path),
+        request_base=request_path.resolve().parent,
+    )
+    execution = run_decoy_report(_cli_path(biological_inventory), effective)
+    logger.info("Wrote decoy-method evidence to {}", execution.result_path)
+
+
 @app.command
 def build(
+    protein_input: Path,
     config: Path,
     *,
     profile: Path | None = None,
     date: datetime.date | None = None,
-    decoy: BuildDecoyOverride | None = None,
 ) -> None:
-    """Build one reproducible FASTA database from profile and request JSON.
+    """Build one reproducible biological FASTA from prepared protein rows.
 
     Relative request paths resolve beside the request file. Profile defaults are
     overridden by request values and then by explicitly supplied CLI options. The
     effective request is written before sequence work starts; the final result JSON
-    records artifacts, checksums, counts, summaries, normalization, and generation.
+    records artifacts, checksums, counts, summaries, normalization, and entrapment.
+    Decoy generation is the separate ``decoy`` command.
 
     Args:
+        protein_input: Canonical decoy-free protein-input Parquet.
         config: Per-run database-build request JSON.
         profile: Optional portable defaults JSON; packaged FGCZ defaults are used otherwise.
         date: Optional build-date override.
-        decoy: Optional decoy-mode override, including ``none``.
     """
     request = load_database_build_request(config)
     if profile is None:
@@ -451,9 +664,9 @@ def build(
         request,
         profile_base=profile_base,
         request_base=config.parent,
-        overrides=DatabaseBuildOverrides(date=date, decoy=decoy),
+        overrides=DatabaseBuildOverrides(date=date),
     )
-    execution = run_database_build(effective)
+    execution = run_database_build(_cli_path(protein_input), effective)
     logger.info("Built {} entries -> {}", execution.result.n_total, execution.result.path)
     logger.info("Effective request -> {}", execution.effective_request_path)
     logger.info("Result -> {}", execution.result_path)
@@ -466,14 +679,20 @@ def index(
     *,
     config: Path | None = None,
     recursive: bool = False,
+    full: bool = False,
+    force: bool = False,
+    prune: bool = False,
 ) -> None:
-    """Build a SQLite or DuckDB FASTA registry from a directory.
+    """Build or incrementally update a SQLite or DuckDB FASTA registry.
 
     Args:
         fasta_dir: Directory containing protein FASTA files.
         registry_path: New ``.sqlite3`` or ``.duckdb`` registry file.
         config: Optional registry-policy JSON document.
         recursive: Search subdirectories too.
+        full: Rebuild the complete registry atomically.
+        force: Reindex unchanged files during an incremental update.
+        prune: Remove missing files during an incremental update.
     """
     document = load_registry_document(config) if config is not None else RegistryDocument()
     path_backend = registry_backends.backend_for_path(registry_path)
@@ -483,13 +702,29 @@ def index(
             f"{document.registry.backend!r}"
         )
     rejections: list[RejectedFasta] = []
-    records = rebuild_registry(
-        fasta_dir,
-        registry_path,
-        _registry_settings(document, fasta_dir, registry_path),
-        recursive=recursive,
-        rejections=rejections,
+    settings = make_registry_settings(
+        document,
+        fasta_root=fasta_dir,
+        registry_path=registry_path,
     )
+    if full or not registry_path.exists():
+        records = rebuild_registry(
+            fasta_dir,
+            registry_path,
+            settings,
+            recursive=recursive,
+            rejections=rejections,
+        )
+    else:
+        records = update_registry(
+            fasta_dir,
+            registry_path,
+            settings,
+            force=force,
+            prune=prune,
+            recursive=recursive,
+            rejections=rejections,
+        )
     logger.info(
         "Indexed {} databases into {}; rejected {} files",
         len(records),
@@ -498,6 +733,63 @@ def index(
     )
     for rejection in rejections:
         logger.warning("Rejected {}: {}", rejection.path, rejection.reason)
+
+
+@app.command(name="index-inventory")
+def index_inventory(
+    inventory_path: Path,
+    registry_path: Path,
+    *,
+    config: Path | None = None,
+    label: str | None = None,
+) -> None:
+    """Index one canonical biological or search inventory directly.
+
+    Args:
+        inventory_path: Canonical protein- or search-inventory Parquet.
+        registry_path: New or existing ``.sqlite3`` or ``.duckdb`` registry.
+        config: Optional registry-policy JSON document.
+        label: Optional database filename stored in the registry.
+    """
+    document = load_registry_document(config) if config is not None else RegistryDocument()
+    record = index_database_inventory(
+        _cli_path(inventory_path),
+        _cli_path(registry_path),
+        document,
+        label=label,
+    )
+    logger.info("Indexed {} entries from {}", record.entry_count, inventory_path)
+
+
+@app.command
+def candidate(
+    inventory_path: Path,
+    registry_path: Path,
+    request_path: Path,
+    *,
+    config: Path | None = None,
+) -> None:
+    """Compare a biological or search inventory without registering it.
+
+    Args:
+        inventory_path: Canonical protein- or search-inventory Parquet.
+        registry_path: Existing SQLite or DuckDB registry.
+        request_path: Candidate-review request JSON.
+        config: Optional registry-policy JSON matching the indexed registry.
+    """
+    request = load_candidate_request(request_path)
+    effective = resolve_candidate_request(
+        request,
+        request_base=request_path.resolve().parent,
+    )
+    document = load_registry_document(config) if config is not None else RegistryDocument()
+    execution = run_candidate_analysis(
+        _cli_path(inventory_path),
+        _cli_path(registry_path),
+        effective,
+        document,
+    )
+    logger.info("Wrote candidate-review evidence to {}", execution.result_path)
 
 
 def _registry_row(record: RegistryRecord) -> dict[str, object]:

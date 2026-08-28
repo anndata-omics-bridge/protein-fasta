@@ -37,6 +37,7 @@ from protein_fasta.analytics.hashing import (
     id_set_fingerprint,
     sequence_hash,
 )
+from protein_fasta.database.models import SearchInventoryEntry
 from protein_fasta.diagnostics.messages import describe_illegal_residues
 from protein_fasta.diagnostics.runtime import UNMATCHED_NAMESPACE
 from protein_fasta.reading.header import parse_header
@@ -1633,6 +1634,172 @@ def populate_candidate_files(
         parsed_decoy=per_file[0].filename_is_decoy if len(per_file) == 1 else False,
     )
     return per_file, replace(combined, dbname=Path(filename).stem)
+
+
+def populate_candidate_entries(
+    connection: RegistryConnection,
+    entries: Iterable[SearchInventoryEntry],
+    settings: RegistrySettings,
+    *,
+    label: str,
+) -> RegistryRecord:
+    """Populate the transient comparison table from canonical inventory rows."""
+    canonical_entries = tuple(entries)
+    if not canonical_entries:
+        raise ValueError("Select at least one inventory entry to inspect.")
+    _create_candidate_table(connection)
+    facts, rows = _inventory_facts_and_rows(
+        canonical_entries,
+        settings,
+        database_id=0,
+    )
+    facts.filenames.append(label)
+    connection.insert_entries(f"{connection.temp(CANDIDATE_TABLE)}", rows)
+    record = _aggregate_record(
+        connection,
+        table=f"{connection.temp(CANDIDATE_TABLE)}",
+        database_id=0,
+        relative_path=label,
+        filename=label,
+        facts=facts,
+        parsed_decoy=bool(facts.counts[EntryKind.DECOY]),
+    )
+    return replace(record, dbname=Path(label).stem)
+
+
+def _inventory_facts_and_rows(
+    entries: tuple[SearchInventoryEntry, ...],
+    settings: RegistrySettings,
+    *,
+    database_id: int,
+    max_detailed_entries: int | None = None,
+) -> tuple[
+    _ScanFacts,
+    list[tuple[int, int, str, str, str | None, int, bytes, bytes | None]],
+]:
+    """Project canonical inventory values directly into registry-owned rows."""
+    diagnostics = load_registry_diagnostics(settings.registry_diagnostics_path)
+    facts = _ScanFacts()
+    aa_sampler = (
+        _AminoAcidReservoir(settings.metadata_aa_sample_size)
+        if max_detailed_entries is not None
+        else None
+    )
+    rows: list[tuple[int, int, str, str, str | None, int, bytes, bytes | None]] = []
+    for ordinal, entry in enumerate(entries):
+        kind = EntryKind(entry.kind)
+        if (
+            max_detailed_entries is not None
+            and ordinal >= max_detailed_entries
+            and facts.detail_level is DetailLevel.FULL
+        ):
+            facts.detail_level = DetailLevel.METADATA_ONLY
+            rows.clear()
+        facts.counts[kind] += 1
+        if facts.detail_level is DetailLevel.FULL:
+            facts.kind_summaries[kind].add(entry.sequence)
+        else:
+            facts.kind_summaries[kind].add_length(len(entry.sequence))
+        if aa_sampler is not None:
+            aa_sampler.add(kind, entry.sequence)
+        namespace, _ = diagnostics.rules.diagnose_identifier(entry.identifier)
+        _count_namespace(
+            facts.id_namespaces,
+            namespace,
+            diagnostics.max_reported_id_namespaces,
+        )
+        if entry.description is None:
+            facts.bare_identifier_entries += 1
+        if kind is EntryKind.SENTINEL:
+            _collect_sentinel(entry.raw_header, facts, settings, diagnostics.decoy_prefix)
+        if facts.detail_level is DetailLevel.FULL:
+            rows.append(
+                (
+                    database_id,
+                    ordinal,
+                    entry.identifier,
+                    kind.value,
+                    entry.contaminant_group,
+                    len(entry.sequence),
+                    bytes.fromhex(entry.sequence_hash),
+                    normalized_description_hash(entry.raw_header),
+                )
+            )
+    if facts.detail_level is DetailLevel.METADATA_ONLY:
+        assert aa_sampler is not None
+        facts.sampled_aa_counts, facts.sampled_aa_sizes = aa_sampler.summarize()
+    return facts, rows
+
+
+def index_inventory_entries(
+    connection: RegistryConnection,
+    entries: Iterable[SearchInventoryEntry],
+    settings: RegistrySettings,
+    *,
+    relative_path: str,
+    filename: str,
+    artifact_size_bytes: int,
+    artifact_mtime_ns: int,
+) -> RegistryRecord:
+    """Atomically index canonical inventory values without reparsing FASTA."""
+    canonical_entries = tuple(entries)
+    if not canonical_entries:
+        raise ValueError("Select at least one inventory entry to index.")
+    parsed = parse_filename(filename, settings.naming)
+    with connection.transaction():
+        existing = connection.execute(
+            "SELECT id FROM databases WHERE relative_path = ?",
+            (relative_path,),
+        ).fetchone()
+        if existing is None:
+            initial_values = _validated_record_values(
+                RegistryRecord(filename=filename, relative_path=relative_path)
+            )
+            database_id = connection.insert_database(_DATABASE_COLUMNS, initial_values)
+        else:
+            database_id = int(existing[0])
+            connection.execute("DELETE FROM entries WHERE database_id = ?", (database_id,))
+        facts, rows = _inventory_facts_and_rows(
+            canonical_entries,
+            settings,
+            database_id=database_id,
+            max_detailed_entries=settings.max_detailed_entries,
+        )
+        facts.filenames.append(filename)
+        facts.file_size_bytes = artifact_size_bytes
+        facts.mtime_ns = artifact_mtime_ns
+        for offset in range(0, len(rows), connection.entry_batch_size):
+            connection.insert_entries(
+                "entries",
+                rows[offset : offset + connection.entry_batch_size],
+            )
+        record = replace(
+            _aggregate_record(
+                connection,
+                table="entries",
+                database_id=database_id,
+                relative_path=relative_path,
+                filename=filename,
+                facts=facts,
+                parsed_decoy=parsed.is_decoy,
+            ),
+            dbname=parsed.dbname,
+        )
+        record_values = _validated_record_values(record)
+        assignments = ", ".join(f"{column} = ?" for column in _DATABASE_COLUMN_NAMES)
+        connection.execute(
+            f"UPDATE databases SET {assignments} WHERE id = ?",
+            (*record_values, database_id),
+        )
+        _replace_database_kind_stats(connection, database_id, record.kind_stats)
+        _refresh_database_pair_stats(connection, database_id)
+    logger.info(
+        "indexed inventory {} ({} entries, {})",
+        filename,
+        record.entry_count,
+        record.detail_level.value,
+    )
+    return record
 
 
 def populate_candidate(

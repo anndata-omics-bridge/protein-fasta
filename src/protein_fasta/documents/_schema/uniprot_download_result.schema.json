@@ -1,0 +1,368 @@
+{
+  "$defs": {
+    "ArtifactDocument": {
+      "additionalProperties": false,
+      "description": "One versioned, checksummed workflow artifact.",
+      "properties": {
+        "byte_count": {
+          "minimum": 0,
+          "title": "Byte Count",
+          "type": "integer"
+        },
+        "checksum": {
+          "minLength": 1,
+          "title": "Checksum",
+          "type": "string"
+        },
+        "checksum_version": {
+          "minLength": 1,
+          "title": "Checksum Version",
+          "type": "string"
+        },
+        "path": {
+          "format": "path",
+          "title": "Path",
+          "type": "string"
+        },
+        "row_count": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Row Count"
+        },
+        "schema_name": {
+          "minLength": 1,
+          "title": "Schema Name",
+          "type": "string"
+        },
+        "schema_version": {
+          "minLength": 1,
+          "title": "Schema Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "schema_name",
+        "schema_version",
+        "path",
+        "checksum_version",
+        "checksum",
+        "byte_count"
+      ],
+      "title": "ArtifactDocument",
+      "type": "object"
+    },
+    "CanonicalGeneDownloadDocument": {
+      "additionalProperties": false,
+      "description": "Acquire one canonical UniProt protein sequence per gene.",
+      "properties": {
+        "type": {
+          "const": "one_seq_per_gene",
+          "default": "one_seq_per_gene",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "title": "CanonicalGeneDownloadDocument",
+      "type": "object"
+    },
+    "CompleteDownloadDocument": {
+      "additionalProperties": false,
+      "description": "Acquire reviewed and unreviewed UniProtKB records for one proteome.",
+      "properties": {
+        "type": {
+          "const": "swissprot_trembl",
+          "default": "swissprot_trembl",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "title": "CompleteDownloadDocument",
+      "type": "object"
+    },
+    "EffectiveUniProtDownloadDocument": {
+      "additionalProperties": false,
+      "description": "Resolved and directly replayable request for one UniProt FASTA.",
+      "properties": {
+        "acquisition": {
+          "discriminator": {
+            "mapping": {
+              "one_seq_per_gene": "#/$defs/CanonicalGeneDownloadDocument",
+              "swissprot": "#/$defs/ReviewedDownloadDocument",
+              "swissprot_trembl": "#/$defs/CompleteDownloadDocument"
+            },
+            "propertyName": "type"
+          },
+          "oneOf": [
+            {
+              "$ref": "#/$defs/ReviewedDownloadDocument"
+            },
+            {
+              "$ref": "#/$defs/CompleteDownloadDocument"
+            },
+            {
+              "$ref": "#/$defs/CanonicalGeneDownloadDocument"
+            }
+          ],
+          "title": "Acquisition"
+        },
+        "output_fasta": {
+          "format": "path",
+          "title": "Output Fasta",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "0.1",
+          "default": "0.1",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "selection": {
+          "discriminator": {
+            "mapping": {
+              "proteome_id": "#/$defs/ProteomeIdSelectionDocument",
+              "taxid": "#/$defs/TaxonomySelectionDocument"
+            },
+            "propertyName": "type"
+          },
+          "oneOf": [
+            {
+              "$ref": "#/$defs/TaxonomySelectionDocument"
+            },
+            {
+              "$ref": "#/$defs/ProteomeIdSelectionDocument"
+            }
+          ],
+          "title": "Selection"
+        },
+        "timeout_seconds": {
+          "exclusiveMinimum": 0.0,
+          "title": "Timeout Seconds",
+          "type": "number"
+        }
+      },
+      "required": [
+        "selection",
+        "acquisition",
+        "output_fasta",
+        "timeout_seconds"
+      ],
+      "title": "EffectiveUniProtDownloadDocument",
+      "type": "object"
+    },
+    "ProteomeIdSelectionDocument": {
+      "additionalProperties": false,
+      "description": "Resolve one explicit UniProt proteome identifier.",
+      "properties": {
+        "proteome_id": {
+          "minLength": 1,
+          "pattern": "^UP[0-9A-Z]+$",
+          "title": "Proteome Id",
+          "type": "string"
+        },
+        "type": {
+          "const": "proteome_id",
+          "default": "proteome_id",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "proteome_id"
+      ],
+      "title": "ProteomeIdSelectionDocument",
+      "type": "object"
+    },
+    "ResolvedProteomeDocument": {
+      "additionalProperties": false,
+      "description": "Resolved provider identity and the evidence used to select it.",
+      "properties": {
+        "gene_count": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Gene Count"
+        },
+        "organism": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Organism"
+        },
+        "protein_count": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Protein Count"
+        },
+        "proteome_id": {
+          "minLength": 1,
+          "title": "Proteome Id",
+          "type": "string"
+        },
+        "resolution_method": {
+          "enum": [
+            "explicit_id",
+            "reference_taxid",
+            "taxonomy_fallback"
+          ],
+          "title": "Resolution Method",
+          "type": "string"
+        },
+        "resolution_query": {
+          "title": "Resolution Query",
+          "type": "string"
+        },
+        "taxid": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Taxid"
+        }
+      },
+      "required": [
+        "proteome_id",
+        "resolution_method",
+        "resolution_query"
+      ],
+      "title": "ResolvedProteomeDocument",
+      "type": "object"
+    },
+    "ReviewedDownloadDocument": {
+      "additionalProperties": false,
+      "description": "Acquire reviewed UniProtKB records for one proteome.",
+      "properties": {
+        "type": {
+          "const": "swissprot",
+          "default": "swissprot",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "title": "ReviewedDownloadDocument",
+      "type": "object"
+    },
+    "TaxonomySelectionDocument": {
+      "additionalProperties": false,
+      "description": "Resolve a UniProt proteome from one positive NCBI taxonomy identifier.",
+      "properties": {
+        "taxid": {
+          "exclusiveMinimum": 0,
+          "title": "Taxid",
+          "type": "integer"
+        },
+        "type": {
+          "const": "taxid",
+          "default": "taxid",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "taxid"
+      ],
+      "title": "TaxonomySelectionDocument",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Machine-readable evidence for one completed UniProt FASTA acquisition.",
+  "properties": {
+    "actual_entry_count": {
+      "exclusiveMinimum": 0,
+      "title": "Actual Entry Count",
+      "type": "integer"
+    },
+    "artifact": {
+      "$ref": "#/$defs/ArtifactDocument"
+    },
+    "effective_request": {
+      "$ref": "#/$defs/EffectiveUniProtDownloadDocument"
+    },
+    "observed_releases": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Observed Releases",
+      "type": "array"
+    },
+    "protein_fasta_version": {
+      "title": "Protein Fasta Version",
+      "type": "string"
+    },
+    "provider_query": {
+      "title": "Provider Query",
+      "type": "string"
+    },
+    "provider_reported_counts": {
+      "default": [],
+      "items": {
+        "type": "integer"
+      },
+      "title": "Provider Reported Counts",
+      "type": "array"
+    },
+    "resolved_proteome": {
+      "$ref": "#/$defs/ResolvedProteomeDocument"
+    },
+    "schema_version": {
+      "const": "0.1",
+      "default": "0.1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "warnings": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "title": "Warnings",
+      "type": "array"
+    }
+  },
+  "required": [
+    "protein_fasta_version",
+    "effective_request",
+    "resolved_proteome",
+    "provider_query",
+    "observed_releases",
+    "actual_entry_count",
+    "artifact"
+  ],
+  "title": "UniProtDownloadResultDocument",
+  "type": "object"
+}

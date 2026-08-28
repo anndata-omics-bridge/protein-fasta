@@ -1,0 +1,158 @@
+{
+  "$defs": {
+    "CanonicalGeneDownloadDocument": {
+      "additionalProperties": false,
+      "description": "Acquire one canonical UniProt protein sequence per gene.",
+      "properties": {
+        "type": {
+          "const": "one_seq_per_gene",
+          "default": "one_seq_per_gene",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "title": "CanonicalGeneDownloadDocument",
+      "type": "object"
+    },
+    "CompleteDownloadDocument": {
+      "additionalProperties": false,
+      "description": "Acquire reviewed and unreviewed UniProtKB records for one proteome.",
+      "properties": {
+        "type": {
+          "const": "swissprot_trembl",
+          "default": "swissprot_trembl",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "title": "CompleteDownloadDocument",
+      "type": "object"
+    },
+    "ProteomeIdSelectionDocument": {
+      "additionalProperties": false,
+      "description": "Resolve one explicit UniProt proteome identifier.",
+      "properties": {
+        "proteome_id": {
+          "minLength": 1,
+          "pattern": "^UP[0-9A-Z]+$",
+          "title": "Proteome Id",
+          "type": "string"
+        },
+        "type": {
+          "const": "proteome_id",
+          "default": "proteome_id",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "proteome_id"
+      ],
+      "title": "ProteomeIdSelectionDocument",
+      "type": "object"
+    },
+    "ReviewedDownloadDocument": {
+      "additionalProperties": false,
+      "description": "Acquire reviewed UniProtKB records for one proteome.",
+      "properties": {
+        "type": {
+          "const": "swissprot",
+          "default": "swissprot",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "title": "ReviewedDownloadDocument",
+      "type": "object"
+    },
+    "TaxonomySelectionDocument": {
+      "additionalProperties": false,
+      "description": "Resolve a UniProt proteome from one positive NCBI taxonomy identifier.",
+      "properties": {
+        "taxid": {
+          "exclusiveMinimum": 0,
+          "title": "Taxid",
+          "type": "integer"
+        },
+        "type": {
+          "const": "taxid",
+          "default": "taxid",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "taxid"
+      ],
+      "title": "TaxonomySelectionDocument",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Authored request for one UniProt proteome FASTA.",
+  "properties": {
+    "acquisition": {
+      "discriminator": {
+        "mapping": {
+          "one_seq_per_gene": "#/$defs/CanonicalGeneDownloadDocument",
+          "swissprot": "#/$defs/ReviewedDownloadDocument",
+          "swissprot_trembl": "#/$defs/CompleteDownloadDocument"
+        },
+        "propertyName": "type"
+      },
+      "oneOf": [
+        {
+          "$ref": "#/$defs/ReviewedDownloadDocument"
+        },
+        {
+          "$ref": "#/$defs/CompleteDownloadDocument"
+        },
+        {
+          "$ref": "#/$defs/CanonicalGeneDownloadDocument"
+        }
+      ],
+      "title": "Acquisition"
+    },
+    "output_fasta": {
+      "format": "path",
+      "title": "Output Fasta",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "0.1",
+      "default": "0.1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "selection": {
+      "discriminator": {
+        "mapping": {
+          "proteome_id": "#/$defs/ProteomeIdSelectionDocument",
+          "taxid": "#/$defs/TaxonomySelectionDocument"
+        },
+        "propertyName": "type"
+      },
+      "oneOf": [
+        {
+          "$ref": "#/$defs/TaxonomySelectionDocument"
+        },
+        {
+          "$ref": "#/$defs/ProteomeIdSelectionDocument"
+        }
+      ],
+      "title": "Selection"
+    },
+    "timeout_seconds": {
+      "default": 120.0,
+      "exclusiveMinimum": 0.0,
+      "title": "Timeout Seconds",
+      "type": "number"
+    }
+  },
+  "required": [
+    "selection",
+    "output_fasta"
+  ],
+  "title": "UniProtDownloadRequestDocument",
+  "type": "object"
+}

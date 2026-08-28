@@ -1,0 +1,466 @@
+{
+  "$defs": {
+    "ArtifactDocument": {
+      "additionalProperties": false,
+      "description": "One versioned, checksummed workflow artifact.",
+      "properties": {
+        "byte_count": {
+          "minimum": 0,
+          "title": "Byte Count",
+          "type": "integer"
+        },
+        "checksum": {
+          "minLength": 1,
+          "title": "Checksum",
+          "type": "string"
+        },
+        "checksum_version": {
+          "minLength": 1,
+          "title": "Checksum Version",
+          "type": "string"
+        },
+        "path": {
+          "format": "path",
+          "title": "Path",
+          "type": "string"
+        },
+        "row_count": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Row Count"
+        },
+        "schema_name": {
+          "minLength": 1,
+          "title": "Schema Name",
+          "type": "string"
+        },
+        "schema_version": {
+          "minLength": 1,
+          "title": "Schema Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "schema_name",
+        "schema_version",
+        "path",
+        "checksum_version",
+        "checksum",
+        "byte_count"
+      ],
+      "title": "ArtifactDocument",
+      "type": "object"
+    },
+    "DecoyCountsDocument": {
+      "additionalProperties": false,
+      "description": "Physical biological and generated record counts.",
+      "properties": {
+        "biological": {
+          "minimum": 0,
+          "title": "Biological",
+          "type": "integer"
+        },
+        "decoy": {
+          "minimum": 0,
+          "title": "Decoy",
+          "type": "integer"
+        },
+        "total": {
+          "minimum": 0,
+          "title": "Total",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "biological",
+        "decoy",
+        "total"
+      ],
+      "title": "DecoyCountsDocument",
+      "type": "object"
+    },
+    "DecoyGenerationEvidenceDocument": {
+      "additionalProperties": false,
+      "description": "Algorithm identity and observed collision or omission outcomes.",
+      "properties": {
+        "dropped_peptides": {
+          "minimum": 0,
+          "title": "Dropped Peptides",
+          "type": "integer"
+        },
+        "initial_collisions": {
+          "minimum": 0,
+          "title": "Initial Collisions",
+          "type": "integer"
+        },
+        "omitted_decoys": {
+          "minimum": 0,
+          "title": "Omitted Decoys",
+          "type": "integer"
+        },
+        "parameters": {
+          "additionalProperties": true,
+          "title": "Parameters",
+          "type": "object"
+        },
+        "seed": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Seed"
+        },
+        "strategy": {
+          "enum": [
+            "reverse",
+            "shuffle",
+            "decoypyrat"
+          ],
+          "title": "Strategy",
+          "type": "string"
+        },
+        "unresolved_collisions": {
+          "minimum": 0,
+          "title": "Unresolved Collisions",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "strategy",
+        "parameters",
+        "initial_collisions",
+        "unresolved_collisions",
+        "dropped_peptides",
+        "omitted_decoys"
+      ],
+      "title": "DecoyGenerationEvidenceDocument",
+      "type": "object"
+    },
+    "DecoyPyratDocument": {
+      "additionalProperties": false,
+      "description": "Request digestion-aware DecoyPYrat generation.",
+      "properties": {
+        "digestion": {
+          "$ref": "#/$defs/DigestionDocument"
+        },
+        "seed": {
+          "title": "Seed",
+          "type": "integer"
+        },
+        "type": {
+          "const": "decoypyrat",
+          "default": "decoypyrat",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "seed"
+      ],
+      "title": "DecoyPyratDocument",
+      "type": "object"
+    },
+    "DecoySummaryDocument": {
+      "additionalProperties": false,
+      "description": "Scientific-sequence summary for one completed search database.",
+      "properties": {
+        "aa_counts": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "title": "Aa Counts",
+          "type": "object"
+        },
+        "aa_frequencies": {
+          "additionalProperties": {
+            "type": "number"
+          },
+          "title": "Aa Frequencies",
+          "type": "object"
+        },
+        "length_max": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Length Max"
+        },
+        "length_mean": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Length Mean"
+        },
+        "length_median": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Length Median"
+        },
+        "length_min": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Length Min"
+        },
+        "length_q1": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Length Q1"
+        },
+        "length_q3": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Length Q3"
+        },
+        "n_sequences": {
+          "minimum": 0,
+          "title": "N Sequences",
+          "type": "integer"
+        },
+        "total_residues": {
+          "minimum": 0,
+          "title": "Total Residues",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "n_sequences",
+        "total_residues",
+        "aa_counts",
+        "aa_frequencies"
+      ],
+      "title": "DecoySummaryDocument",
+      "type": "object"
+    },
+    "DigestionDocument": {
+      "additionalProperties": false,
+      "description": "Peptide-length and missed-cleavage limits for one enzyme.",
+      "properties": {
+        "enzyme": {
+          "default": "trypsin",
+          "title": "Enzyme",
+          "type": "string"
+        },
+        "max_length": {
+          "default": 50,
+          "minimum": 1,
+          "title": "Max Length",
+          "type": "integer"
+        },
+        "min_length": {
+          "default": 7,
+          "minimum": 1,
+          "title": "Min Length",
+          "type": "integer"
+        },
+        "missed_cleavages": {
+          "default": 0,
+          "maximum": 2,
+          "minimum": 0,
+          "title": "Missed Cleavages",
+          "type": "integer"
+        }
+      },
+      "title": "DigestionDocument",
+      "type": "object"
+    },
+    "EffectiveDecoyRequestDocument": {
+      "additionalProperties": false,
+      "description": "Fully resolved and directly replayable decoy request.",
+      "properties": {
+        "decoy_prefix": {
+          "minLength": 1,
+          "title": "Decoy Prefix",
+          "type": "string"
+        },
+        "output_fasta": {
+          "format": "path",
+          "title": "Output Fasta",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "0.1",
+          "default": "0.1",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "strategy": {
+          "discriminator": {
+            "mapping": {
+              "decoypyrat": "#/$defs/DecoyPyratDocument",
+              "reverse": "#/$defs/ReverseDecoyDocument",
+              "shuffle": "#/$defs/ShuffleDecoyDocument"
+            },
+            "propertyName": "type"
+          },
+          "oneOf": [
+            {
+              "$ref": "#/$defs/ReverseDecoyDocument"
+            },
+            {
+              "$ref": "#/$defs/ShuffleDecoyDocument"
+            },
+            {
+              "$ref": "#/$defs/DecoyPyratDocument"
+            }
+          ],
+          "title": "Strategy"
+        }
+      },
+      "required": [
+        "output_fasta",
+        "decoy_prefix",
+        "strategy"
+      ],
+      "title": "EffectiveDecoyRequestDocument",
+      "type": "object"
+    },
+    "ReverseDecoyDocument": {
+      "additionalProperties": false,
+      "description": "Request deterministic whole-protein reversal.",
+      "properties": {
+        "type": {
+          "const": "reverse",
+          "default": "reverse",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "title": "ReverseDecoyDocument",
+      "type": "object"
+    },
+    "ShuffleDecoyDocument": {
+      "additionalProperties": false,
+      "description": "Request deterministic seeded whole-protein shuffling.",
+      "properties": {
+        "seed": {
+          "title": "Seed",
+          "type": "integer"
+        },
+        "type": {
+          "const": "shuffle",
+          "default": "shuffle",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "seed"
+      ],
+      "title": "ShuffleDecoyDocument",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Evidence for one completed biological-inventory decoy operation.",
+  "properties": {
+    "biological_inventory": {
+      "$ref": "#/$defs/ArtifactDocument"
+    },
+    "counts": {
+      "$ref": "#/$defs/DecoyCountsDocument"
+    },
+    "effective_request": {
+      "$ref": "#/$defs/EffectiveDecoyRequestDocument"
+    },
+    "generation": {
+      "$ref": "#/$defs/DecoyGenerationEvidenceDocument"
+    },
+    "protein_fasta_version": {
+      "title": "Protein Fasta Version",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "0.1",
+      "default": "0.1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "search_fasta": {
+      "$ref": "#/$defs/ArtifactDocument"
+    },
+    "search_inventory": {
+      "$ref": "#/$defs/ArtifactDocument"
+    },
+    "summary": {
+      "$ref": "#/$defs/DecoySummaryDocument"
+    },
+    "warnings": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "title": "Warnings",
+      "type": "array"
+    }
+  },
+  "required": [
+    "protein_fasta_version",
+    "effective_request",
+    "biological_inventory",
+    "search_fasta",
+    "search_inventory",
+    "counts",
+    "summary",
+    "generation"
+  ],
+  "title": "DecoyResultDocument",
+  "type": "object"
+}

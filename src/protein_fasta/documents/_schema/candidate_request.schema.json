@@ -1,0 +1,44 @@
+{
+  "additionalProperties": false,
+  "description": "Candidate-comparison policy and explicit Parquet destination.",
+  "properties": {
+    "clustering_metric": {
+      "default": "target_ids",
+      "enum": [
+        "target_ids",
+        "target_sequences"
+      ],
+      "title": "Clustering Metric",
+      "type": "string"
+    },
+    "neighbour_limit": {
+      "default": 50,
+      "minimum": 1,
+      "title": "Neighbour Limit",
+      "type": "integer"
+    },
+    "output_parquet": {
+      "format": "path",
+      "title": "Output Parquet",
+      "type": "string"
+    },
+    "overlap_threshold": {
+      "default": 0.99,
+      "maximum": 1.0,
+      "minimum": 0.0,
+      "title": "Overlap Threshold",
+      "type": "number"
+    },
+    "schema_version": {
+      "const": "0.1",
+      "default": "0.1",
+      "title": "Schema Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "output_parquet"
+  ],
+  "title": "CandidateRequestDocument",
+  "type": "object"
+}

@@ -11,9 +11,12 @@ containers =
 exhaustive = True
 layers =
     cli
-    database_build | diagnostic_summary
+    candidate_analysis | database_build | decoy_database | decoy_report | diagnostic_summary | peptide_workflow | protein_input | uniprot_download | uniprot_catalog
+    registry_workflow
+    peptide
     registry
-    build | record | frame | writing | summary
+    build | inventory | record | frame | summary | artifact_io | uniprot
+    database
     analytics_compile
     compile | frame_compile | documents
     analytics | reading | validation | diagnostics | frame_formats | schema
@@ -46,17 +49,43 @@ containers =
     protein_fasta.registry
 exhaustive = True
 layers =
+    clustering
     comparisons
-    indexing | clustering
+    indexing
     export | pair_metrics | snapshots | classification | metadata
     backend | filenames | kinds | rules
 
 [importlinter:contract:reading-components]
-name = Lexical parsing and generic header splitting are independent
-type = independence
-modules =
-    protein_fasta.reading.parser
-    protein_fasta.reading.header
+name = FASTA serialization depends inward on lexical records
+type = layers
+containers =
+    protein_fasta.reading
+exhaustive = True
+layers =
+    writer
+    parser | header
+
+[importlinter:contract:uniprot-components]
+name = UniProt acquisition and resolution depend on provider mechanics
+type = layers
+containers =
+    protein_fasta.uniprot
+exhaustive = True
+layers =
+    acquisition | resolution
+    provider_rows | queries | transport
+    models
+
+[importlinter:contract:peptide-components]
+name = Peptide executors depend on backend-free computation and models
+type = layers
+containers =
+    protein_fasta.peptide
+exhaustive = True
+layers =
+    executors
+    computation
+    models
 
 [importlinter:contract:frame-formats-tree]
 name = Polars frame operations depend only on runtime values
@@ -76,7 +105,10 @@ containers =
 exhaustive = True
 layers =
     registry
-    build
+    decoy_report
+    build | candidate | decoy | peptide | protein_input
+    uniprot
+    artifacts
     analytics | diagnostics | frame_formats
     base
 

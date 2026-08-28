@@ -8,6 +8,7 @@ _CHILDREN = {
     "build",
     "diagnostics",
     "frame_formats",
+    "peptide",
     "reading",
     "registry",
     "schema",
@@ -15,12 +16,20 @@ _CHILDREN = {
 }
 _MULTI_CHILD_COMPOSERS = {
     "analytics_compile",
+    "artifact_io",
+    "candidate_analysis",
     "cli",
     "compile",
     "database_build",
+    "decoy_database",
+    "decoy_report",
     "frame",
     "frame_compile",
+    "peptide_workflow",
+    "protein_input",
     "record",
+    "registry_workflow",
+    "uniprot_catalog",
 }
 
 
@@ -62,11 +71,19 @@ def test_cli_composes_only_authorized_package_components() -> None:
         "analytics",
         "analytics_compile",
         "compile",
+        "candidate_analysis",
         "database_build",
+        "decoy_database",
+        "decoy_report",
         "diagnostic_summary",
         "documents",
         "frame",
+        "peptide_workflow",
+        "protein_input",
         "record",
         "registry",
+        "registry_workflow",
         "schema",
+        "uniprot_catalog",
+        "uniprot_download",
     }

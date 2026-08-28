@@ -1,0 +1,171 @@
+{
+  "$defs": {
+    "DigestionDocument": {
+      "additionalProperties": false,
+      "description": "Peptide-length and missed-cleavage limits for one enzyme.",
+      "properties": {
+        "enzyme": {
+          "default": "trypsin",
+          "title": "Enzyme",
+          "type": "string"
+        },
+        "max_length": {
+          "default": 50,
+          "minimum": 1,
+          "title": "Max Length",
+          "type": "integer"
+        },
+        "min_length": {
+          "default": 7,
+          "minimum": 1,
+          "title": "Min Length",
+          "type": "integer"
+        },
+        "missed_cleavages": {
+          "default": 0,
+          "maximum": 2,
+          "minimum": 0,
+          "title": "Missed Cleavages",
+          "type": "integer"
+        }
+      },
+      "title": "DigestionDocument",
+      "type": "object"
+    },
+    "DuckDBPeptideExecutionDocument": {
+      "additionalProperties": false,
+      "description": "Request a temporary DuckDB merge workspace.",
+      "properties": {
+        "partition_size": {
+          "default": 500,
+          "minimum": 1,
+          "title": "Partition Size",
+          "type": "integer"
+        },
+        "type": {
+          "const": "duckdb",
+          "default": "duckdb",
+          "title": "Type",
+          "type": "string"
+        },
+        "workers": {
+          "default": 1,
+          "minimum": 1,
+          "title": "Workers",
+          "type": "integer"
+        }
+      },
+      "title": "DuckDBPeptideExecutionDocument",
+      "type": "object"
+    },
+    "MemoryPeptideExecutionDocument": {
+      "additionalProperties": false,
+      "description": "Request in-memory deterministic partition merging.",
+      "properties": {
+        "partition_size": {
+          "default": 500,
+          "minimum": 1,
+          "title": "Partition Size",
+          "type": "integer"
+        },
+        "type": {
+          "const": "memory",
+          "default": "memory",
+          "title": "Type",
+          "type": "string"
+        },
+        "workers": {
+          "default": 1,
+          "minimum": 1,
+          "title": "Workers",
+          "type": "integer"
+        }
+      },
+      "title": "MemoryPeptideExecutionDocument",
+      "type": "object"
+    },
+    "SQLitePeptideExecutionDocument": {
+      "additionalProperties": false,
+      "description": "Request a temporary SQLite merge workspace.",
+      "properties": {
+        "partition_size": {
+          "default": 500,
+          "minimum": 1,
+          "title": "Partition Size",
+          "type": "integer"
+        },
+        "type": {
+          "const": "sqlite",
+          "default": "sqlite",
+          "title": "Type",
+          "type": "string"
+        },
+        "workers": {
+          "default": 1,
+          "minimum": 1,
+          "title": "Workers",
+          "type": "integer"
+        }
+      },
+      "title": "SQLitePeptideExecutionDocument",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Digestion policy, execution behavior, and explicit artifact paths.",
+  "properties": {
+    "digestion": {
+      "$ref": "#/$defs/DigestionDocument"
+    },
+    "execution": {
+      "discriminator": {
+        "mapping": {
+          "duckdb": "#/$defs/DuckDBPeptideExecutionDocument",
+          "memory": "#/$defs/MemoryPeptideExecutionDocument",
+          "sqlite": "#/$defs/SQLitePeptideExecutionDocument"
+        },
+        "propertyName": "type"
+      },
+      "oneOf": [
+        {
+          "$ref": "#/$defs/MemoryPeptideExecutionDocument"
+        },
+        {
+          "$ref": "#/$defs/SQLitePeptideExecutionDocument"
+        },
+        {
+          "$ref": "#/$defs/DuckDBPeptideExecutionDocument"
+        }
+      ],
+      "title": "Execution"
+    },
+    "mapping_parquet": {
+      "format": "path",
+      "title": "Mapping Parquet",
+      "type": "string"
+    },
+    "peptide_fasta": {
+      "format": "path",
+      "title": "Peptide Fasta",
+      "type": "string"
+    },
+    "peptides_parquet": {
+      "format": "path",
+      "title": "Peptides Parquet",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "0.1",
+      "default": "0.1",
+      "title": "Schema Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "peptides_parquet",
+    "mapping_parquet",
+    "peptide_fasta"
+  ],
+  "title": "PeptideBuildRequestDocument",
+  "type": "object"
+}

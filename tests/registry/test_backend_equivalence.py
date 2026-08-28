@@ -23,14 +23,18 @@ from pathlib import Path
 import pytest
 from tests.registry_support import BackendSettings, Settings
 
+from protein_fasta.analytics.clustering import ClusteringMetric
 from protein_fasta.registry.backend import duckdb as duckdb_backend
 from protein_fasta.registry.backend import factory
 from protein_fasta.registry.backend.schema import REGISTRY_TABLES
+from protein_fasta.registry.clustering import target_counts
+from protein_fasta.registry.export import query_similarity_data
 from protein_fasta.registry.indexing import (
     SCHEMA_VERSION,
     RegistryRecord,
     connect_registry,
     export_registry_stats_only,
+    initialize_registry,
     list_databases,
     rebuild_registry,
 )
@@ -156,6 +160,26 @@ def test_materialized_pair_statistics_agree_row_for_row(built: dict) -> None:
 
 def test_both_backends_store_the_same_number_of_entries(built: dict) -> None:
     assert built["duckdb"][2] == built["sqlite"][2]
+
+
+@pytest.mark.parametrize("backend", BACKENDS)
+def test_empty_database_selection_means_no_rows(backend: str, tmp_path: Path) -> None:
+    """An empty neighbourhood is a valid set, never the invalid SQL ``IN ()``."""
+    settings = Settings(
+        fasta_root=tmp_path / "databases",
+        registry_dir=tmp_path / backend,
+        registry=BackendSettings(backend=backend),
+    )
+    path = tmp_path / backend / f"registry{factory.suffix_for(backend)}"
+    with connect_registry(path, backend=backend) as connection:
+        initialize_registry(connection, settings)
+
+        data = query_similarity_data(connection, database_ids=())
+        counts = target_counts(connection, ClusteringMetric.TARGET_IDS, ())
+
+    assert data.relative_paths == ()
+    assert data.pairs == ()
+    assert counts == {}
 
 
 @pytest.mark.parametrize("table", sorted(REGISTRY_TABLES))

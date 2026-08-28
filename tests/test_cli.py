@@ -21,6 +21,7 @@ from protein_fasta.cli import (
     formats,
     index,
     pairs,
+    prepare,
     registry,
     table,
 )
@@ -269,21 +270,30 @@ def test_index_accepts_json_registry_policy(tmp_path: Path) -> None:
 def test_build_resolves_profile_request_and_writes_typed_result(tmp_path: Path) -> None:
     target = tmp_path / "target.fasta"
     target.write_text(">P1 one\nac d*\n")
+    prepare_config = tmp_path / "prepare.json"
+    prepare_config.write_text(
+        json.dumps(
+            {
+                "sources": [{"type": "target", "source_id": "target", "path": "target.fasta"}],
+                "output_parquet": "protein-input.parquet",
+            }
+        )
+    )
+    prepare(prepare_config)
+    protein_input = tmp_path / "protein-input.parquet"
     config = tmp_path / "build.json"
     config.write_text(
         json.dumps(
             {
-                "schema_version": "0.2",
-                "targets": ["target.fasta"],
+                "schema_version": "0.3",
                 "output_dir": "out",
                 "date": "2026-08-27",
                 "name_fields": {"project": 1, "dbn": 2, "description": "demo"},
-                "decoy": None,
             }
         )
     )
 
-    build(config)
+    build(protein_input, config)
 
     fasta = tmp_path / "out" / "p1_db2_demo_20260827.fasta"
     effective = fasta.with_suffix(".fasta.effective.json")
@@ -292,22 +302,23 @@ def test_build_resolves_profile_request_and_writes_typed_result(tmp_path: Path) 
     assert fasta.read_text().endswith(">P1 one\nACD\n")
     effective_payload = json.loads(effective.read_text())
     payload = json.loads(result.read_text())
-    assert effective_payload["decoy"] is None
-    assert effective_payload["targets"] == [str(target)]
+    assert "decoy" not in effective_payload
+    assert "targets" not in effective_payload
     assert payload["counts"] == {
         "contaminant": 0,
-        "decoy": 0,
         "entrapment": 0,
         "target": 1,
         "total": 2,
     }
-    fasta_artifact = next(
-        artifact for artifact in payload["artifacts"] if artifact["schema_name"] == "protein-fasta"
-    )
+    fasta_artifact = payload["biological_fasta"]
     assert fasta_artifact["checksum_version"] == "md5-file-v1"
     inventory_frame = pl.read_parquet(inventory)
     assert inventory_frame.columns == [
         "final_order",
+        "source_order",
+        "record_order",
+        "source_id",
+        "source_role",
         "raw_header",
         "id",
         "description",
@@ -315,14 +326,9 @@ def test_build_resolves_profile_request_and_writes_typed_result(tmp_path: Path) 
         "kind",
         "contaminant_group",
         "sequence_hash",
-        "decoy_mode",
         "entrapment_strategy",
     ]
     assert inventory_frame["kind"].to_list() == ["sentinel", "target"]
-    inventory_artifact = next(
-        artifact
-        for artifact in payload["artifacts"]
-        if artifact["schema_name"] == "protein-inventory"
-    )
+    inventory_artifact = payload["protein_inventory"]
     assert inventory_artifact["row_count"] == 2
-    assert payload["summary"]["aa_counts"] == {"A": 4, "C": 4, "D": 1, "P": 3, "R": 3}
+    assert payload["summary"]["aa_counts"] == {"A": 1, "C": 1, "D": 1}

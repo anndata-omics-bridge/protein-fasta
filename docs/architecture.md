@@ -1,8 +1,9 @@
 # Architecture
 
-`protein_fasta` owns reusable protein-FASTA reading, tabulation, diagnostics, analytics,
-database construction, and registry persistence. `fasta_gen` is a consumer: it selects curated
-catalog inputs, stages and installs builds, and presents results in Dash.
+`protein_fasta` owns reusable protein-FASTA acquisition, reading, tabulation, diagnostics,
+biological construction, decoy generation, peptide construction, comparison, and registry
+persistence. `fasta_gen` is a consumer: it supplies site catalogs and policy, stages or installs
+approved artifacts, and presents results in Dash.
 
 The package is an explicit inward dependency structure enforced by Import Linter:
 
@@ -10,27 +11,22 @@ The package is an explicit inward dependency structure enforced by Import Linter
 cli
  |
  v
-database_build | diagnostic_summary
+workflow composition roots
+(protein_input, database_build, decoy_database, peptide_workflow,
+ candidate_analysis, registry_workflow, uniprot_download, uniprot_catalog)
  |
  v
-registry
+domain and persistence packages
+(database, peptide, registry, uniprot, build)
  |
  v
-build | record | frame | writing | summary
- |
- v
-analytics_compile
- |
- v
-compile | frame_compile | documents
- |
- v
-analytics | reading | validation | diagnostics | frame_formats | schema
+focused computation and I/O
+(analytics, reading, validation, diagnostics, frame_formats, schema)
 ```
 
-This is an allowed-dependency graph, not a required call chain. Modules on the same line are
-independent. Root composition modules may know several inward components; child packages do not
-import upward or sideways.
+This is an allowed-dependency graph, not a required call chain. Root composition modules may know
+several inward components; child packages do not import upward or across forbidden siblings. The
+exhaustive `.importlinter` contracts are the executable dependency definition.
 
 ## Module structure
 
@@ -39,49 +35,56 @@ import upward or sideways.
 | `cli.py` | Thin Cyclopts/Loguru delivery adapter |
 | `record.py`, `frame.py` | Minimal Python records and optional Polars table products |
 | `diagnostic_summary.py`, `summary.py` | Aggregate diagnostic and sequence statistics |
-| `reading/`, `validation/`, `writing.py` | Lexical I/O and fixed normalization |
+| `reading/`, `validation/` | Lexical I/O, FASTA writing, and fixed normalization |
 | `diagnostics/`, `compile.py` | Schema-free diagnostic runtime and document compilation |
 | `frame_formats/`, `frame_compile.py` | Polars-native detection and extraction |
 | `analytics/` | Backend-free hashes, digestion, comparisons, and clustering |
 | `analytics_compile.py` | Enzyme/digestion document compilation |
-| `build/naming.py` | Database-name and filename construction only |
-| `build/metadata.py` | `aa|` metadata and contaminant-marker construction only |
-| `build/generation/` | Decoy and entrapment runtime behavior |
-| `database_build.py` | Public assembly composition root |
-| `registry/indexing.py` | FASTA scanning, indexing, schema version 11, and typed records |
+| `database/`, `inventory.py` | Typed biological/search values and canonical Parquet projection |
+| `build/naming.py`, `build/metadata.py` | Database naming and `aa|` metadata construction |
+| `build/generation/` | Decoy and biological-entrapment runtime behavior |
+| `protein_input.py`, `database_build.py` | Source preparation and biological assembly roots |
+| `decoy_database.py`, `decoy_report.py` | Search-database generation and method diagnostics |
+| `peptide/`, `peptide_workflow.py` | Peptide model, executors, artifacts, and comparisons |
+| `uniprot/`, `uniprot_catalog.py`, `uniprot_download.py` | Provider transport, catalog, resolution, and acquisition |
+| `registry/indexing.py` | FASTA/inventory indexing, schema version 11, and typed records |
 | `registry/comparisons.py`, `pair_metrics.py` | Storage queries for database comparisons |
 | `registry/clustering.py`, `export.py` | Registry-to-analytics projection and stable exports |
 | `registry/backend/` | Backend protocol, portable schema, SQLite, DuckDB, and selection |
-| `registry/filenames.py`, `metadata.py`, `classification.py` | Existing-file interpretation and operational kinds |
-| `schema/` | Passive, strict Pydantic JSON documents |
+| `candidate_analysis.py`, `registry_workflow.py` | Read-only review and approved inventory indexing |
+| `schema/` | Passive, strict Pydantic storage documents |
 | `documents.py`, `documents/` | Explicit-path/resource loading and packaged rules |
 
-## Build and analytics are separate
+## Build stages are explicit
 
-`build/` creates database artifacts. It renders names, metadata records, contaminant block
-markers, decoys, and entrapment records. `database_build.py` normalizes inputs once, rejects
-conflicting identifiers, assembles records deterministically, writes the FASTA, and returns a
-typed result.
+`protein_input.py` prepares ordered sources as canonical Parquet. `database_build.py` consumes
+that handoff, renders names and metadata records, normalizes inputs once, rejects conflicting
+identifiers, and writes a biological FASTA plus inventory. Optional entrapment belongs to this
+biological assembly because its records are members of the biological target space.
+
+`decoy_database.py` subsequently consumes the completed biological inventory and produces the
+search FASTA and search inventory. This boundary permits repeatable comparison or replacement of
+decoy algorithms without repeating acquisition, source selection, contaminants, or entrapment.
+
+`peptide_workflow.py` consumes either biological or search inventory. Its memory, SQLite, and
+DuckDB executors share the same `PeptideExecutor` capability and return the same typed
+`PeptideDatabase`; executor-specific persistence never changes the public artifacts.
+
+## Analytics and persistence are separate
 
 `analytics/` creates evidence. It hashes supplied values, digests already-normalized sequences,
 calculates similarities, and clusters comparisons. It imports no build code, Pydantic, SQLite,
-DuckDB, Polars, Dash, or consuming application. A build may consume an inward digestion runtime;
-analytics never imports build behavior.
+DuckDB, Polars, Dash, or consuming application. Workflows compile passive documents at their root
+and pass exact runtime values inward.
 
-This separation is why filename construction and `aa|... CRAPCRAP...` bookkeeping are not mixed
-with sequence hashes or comparison fingerprints.
-
-## Registry boundary
-
-The registry is reusable infrastructure, not GUI state. Its backend protocol expresses the SQL
-capabilities indexing and comparison queries exercise. SQLite and DuckDB implement that protocol;
-engine selection happens once from configuration during creation and from the file suffix during
-reading.
+The registry backend protocol expresses the SQL capabilities indexing and comparison queries
+exercise. SQLite and DuckDB implement that protocol; engine selection happens once from
+configuration during creation and from the file suffix during reading. Canonical inventories can
+be indexed directly, while legacy FASTA indexing remains available.
 
 Every full-detail database stores normalized BLAKE2b-128 sequence hashes and materialized target
 and contaminant pair statistics. Metadata-only records retain exact aggregate counts without the
-entry rows. Comparison calculations and average-linkage clustering consume typed values outside
-the backend. Registry schema 11 records algorithm/configuration versions and refuses an older
+entry rows. Registry schema 11 records algorithm/configuration versions and refuses an older
 schema; the BLAKE2b cutover requires a full reindex.
 
 ## Hash meanings
@@ -97,26 +100,28 @@ Hashes are selected by semantic role:
 Normalization is never hidden inside a hash function. External source manifests that explicitly
 publish SHA-256 remain verified with SHA-256; that authored integrity contract is not redefined.
 
-## Configuration and runtime behavior
+## Parameters and exchange artifacts
 
-Pydantic models in `schema/` are storage documents. They validate JSON but do not perform FASTA
-work. Root loading/compilation boundaries construct schema-free runtime values. The only
-discriminator branches belong at those construction boundaries; downstream code invokes the
-selected behavior.
+Pydantic models in `schema/` are passive storage documents. They validate serialized parameters
+but do not perform FASTA work. Root loading and compilation boundaries construct schema-free
+runtime values. The only discriminator branches belong at those construction boundaries;
+downstream code invokes the selected behavior.
 
-Database-build profile and request JSON are resolved once into a complete effective document.
-`run_database_build()` writes that document before computation and a typed result afterward.
-Registry JSON contains backend and indexing policy while source and destination paths remain
-operation arguments. Header parsers remain one independently authored JSON file per source database.
+Each workflow writes effective parameters before computation and typed result evidence after its
+data artifacts are durably published. Canonical protein, search, peptide, mapping, comparison,
+catalog, and registry exchanges are Parquet; FASTA remains the search-tool exchange; parameter and
+result evidence use JSON. Header parsers remain one independently authored document per source
+database.
 
 ## Optional dependencies and consumers
 
 - Base: records, lexical I/O, diagnostics, summaries, hashing, and schemas.
 - `frame`: Polars frame products.
-- `duckdb`: DuckDB registry adapter and Arrow transfer support.
+- `uniprot`: HTTP transport for catalog and FASTA acquisition.
+- `duckdb`: DuckDB registry and peptide-execution support.
 - `generation`: decoy/entrapment generation through `fdr_benchmark`.
-- `cli`: Cyclopts, Loguru, Polars/XLSX output, and generation commands.
+- `cli`: Cyclopts, Loguru, Polars/XLSX output, and workflow commands.
 
-The package imports none of `fasta_gen`, Prozor, APB, AnnData, or MuData. UniProt download and the
-curated contaminant/QC catalog remain in `fasta_gen` at this stage; neither is part of the registry
-or analytical core described here.
+The package imports none of `fasta_gen`, Prozor, APB, AnnData, or MuData. Site-specific curated
+contaminant/QC catalogs, installation destinations, authorization, and GUI state remain in
+`fasta_gen`; reusable UniProt and peptide operations live here.

@@ -1,0 +1,59 @@
+{
+  "additionalProperties": false,
+  "description": "Select clean biological rows from existing database inventories.",
+  "properties": {
+    "foreign_inventory": {
+      "anyOf": [
+        {
+          "format": "path",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Foreign Inventory"
+    },
+    "foreign_source_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Foreign Source Id"
+    },
+    "output_parquet": {
+      "format": "path",
+      "title": "Output Parquet",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "0.1",
+      "default": "0.1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "source_id": {
+      "minLength": 1,
+      "title": "Source Id",
+      "type": "string"
+    },
+    "source_inventory": {
+      "format": "path",
+      "title": "Source Inventory",
+      "type": "string"
+    }
+  },
+  "required": [
+    "source_inventory",
+    "source_id",
+    "output_parquet"
+  ],
+  "title": "DerivedProteinInputRequestDocument",
+  "type": "object"
+}

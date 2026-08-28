@@ -24,11 +24,16 @@ protein-fasta = "protein_fasta.cli:main"
 [project.optional-dependencies]
 cli = [
     "cyclopts>=4.20,<5",
+    "httpx>=0.28,<1",
     "loguru>=0.7,<1",
     "polars>=1.43.2,<2",
     "xlsxwriter>=3.2,<4",
 ]
 frame = [
+    "polars>=1.43.2,<2",
+]
+uniprot = [
+    "httpx>=0.28,<1",
     "polars>=1.43.2,<2",
 ]
 duckdb = [

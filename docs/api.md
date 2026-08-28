@@ -68,12 +68,11 @@ Digestion documents select a packaged enzyme rule and peptide-length/missed-clea
 `digest_sequence()` requires an already-normalized sequence and returns peptide text with its
 missed-cleavage count.
 
-## Database construction
+## Protein input and biological database construction
 
-The stable workflow API is `resolve_database_build()` followed by `run_database_build()`. The
-first call combines a `DatabaseBuildProfileDocument`, a `DatabaseBuildRequestDocument`, their
-base directories, and optional typed `DatabaseBuildOverrides`. The second consumes the complete
-`EffectiveDatabaseBuildDocument` and returns `DatabaseBuildExecution`.
+Source selection and database assembly are separate APIs. Preparation turns ordered target,
+contaminant, and optional foreign FASTA sources into the canonical protein-input Parquet. The
+biological build consumes that artifact and never creates decoys.
 
 ```python
 from pathlib import Path
@@ -82,39 +81,124 @@ from protein_fasta.database_build import resolve_database_build, run_database_bu
 from protein_fasta.documents import (
     load_database_build_profile,
     load_database_build_request,
+    load_protein_input_request,
+)
+from protein_fasta.protein_input import (
+    resolve_protein_input_request,
+    run_protein_input_preparation,
 )
 
+input_request_path = Path("prepare.json")
+input_request = resolve_protein_input_request(
+    load_protein_input_request(input_request_path),
+    request_base=input_request_path.parent,
+)
+prepared = run_protein_input_preparation(input_request)
+
 profile_path = Path("fgcz.json")
-request_path = Path("request.json")
+request_path = Path("biological-build.json")
 effective = resolve_database_build(
     load_database_build_profile(profile_path),
     load_database_build_request(request_path),
     profile_base=profile_path.parent,
     request_base=request_path.parent,
 )
-execution = run_database_build(effective)
+biological = run_database_build(prepared.protein_input_path, effective)
 ```
 
-This is the API `fasta_gen` should call. It may construct the Pydantic documents in memory instead
-of loading JSON; the resolver and execution call stay identical. The returned execution contains
-the runtime `PipelineResult`, typed `DatabaseBuildResultDocument`, and both JSON paths.
+Applications such as `fasta_gen` may construct the same Pydantic parameter documents in memory.
+Resolvers apply path and precedence rules; runners receive complete effective parameters and
+return typed execution values containing the runtime result and durable artifact paths.
 
-The internal low-level `build_database()` currently accepts already-resolved target,
-contaminant, and optional foreign-source entries plus:
+`resolve_derived_protein_input_request()` and `run_derived_protein_input_preparation()` prepare an
+entrapment source from existing protein or search inventories. They retain target and contaminant
+rows, exclude sentinels, prior entrapment, and decoys, and mark retained rows from the optional
+foreign inventory with the foreign role.
+
+## Decoy generation
+
+Decoy generation is a subsequent workflow over a completed biological inventory:
+
+```python
+from pathlib import Path
+
+from protein_fasta.decoy_database import resolve_decoy_request, run_decoy_generation
+from protein_fasta.documents import load_decoy_request
+
+request_path = Path("reverse-decoys.json")
+effective = resolve_decoy_request(
+    load_decoy_request(request_path),
+    request_base=request_path.parent,
+)
+search = run_decoy_generation(
+    Path("build/human.fasta.protein-inventory.parquet"),
+    effective,
+)
+```
+
+The execution returns a `SearchDatabase`, search FASTA, search-inventory Parquet, and typed
+effective/result evidence. Reverse, shuffle, and DecoyPYrat are explicit strategy document
+variants compiled once at the workflow boundary.
+
+The low-level `build_database()` accepts already-resolved target, contaminant, and optional
+foreign-source entries plus:
 
 - `NamingDocument` for database and filename construction;
 - `MetadataDocument` for the `aa|` sentinel and contaminant section markers;
-- compiled `RegistryDiagnosticRules` for residue checks and the decoy prefix;
-- `DecoyDocument` and optional `EntrapmentDocument` for generation behavior.
+- compiled `RegistryDiagnosticRules` for residue checks; and
+- optional biological entrapment behavior.
 
 It normalizes once, rejects one identifier with conflicting sequences, deduplicates identical
-records, generates requested records, writes deterministic FASTA output, and returns
-`PipelineResult`. It does not resolve a contaminant catalog, install into a site collection, or
-update a registry; those are application workflows.
+records, writes deterministic FASTA output, and returns `PipelineResult`. It does not create
+decoys, resolve a contaminant catalog, install into a site collection, or update a registry.
 
 New callers should not assemble that low-level parameter list. Use the workflow API or the
 equivalent `build` CLI command. See [Build workflows](workflows.md) for precedence, artifacts,
 decoy ownership, and the portrait workflow diagrams.
+
+## Peptide construction and comparison
+
+```python
+from pathlib import Path
+
+from protein_fasta.documents import (
+    load_peptide_build_request,
+    load_peptide_comparison_request,
+)
+from protein_fasta.peptide_workflow import (
+    resolve_peptide_build_request,
+    resolve_peptide_comparison_request,
+    run_peptide_build,
+    run_peptide_comparison,
+)
+
+build_request_path = Path("peptides.json")
+peptide_request = resolve_peptide_build_request(
+    load_peptide_build_request(build_request_path),
+    request_base=build_request_path.parent,
+)
+peptides = run_peptide_build(
+    Path("build/human_d.fasta.search-inventory.parquet"),
+    peptide_request,
+)
+
+comparison_request_path = Path("peptide-comparison.json")
+comparison_request = resolve_peptide_comparison_request(
+    load_peptide_comparison_request(comparison_request_path),
+    request_base=comparison_request_path.parent,
+)
+comparison = run_peptide_comparison(
+    peptides.peptides_path,
+    Path("second-peptides.parquet"),
+    comparison_request,
+)
+```
+
+`run_peptide_build()` accepts either protein- or search-inventory Parquet and returns a typed
+`PeptideDatabase` plus peptide inventory, protein-peptide mapping, and unique-peptide FASTA.
+Memory, SQLite, and DuckDB executors implement the same `PeptideExecutor` capability and produce
+the same artifact schemas. Peptide comparison returns one frame with all, target, contaminant,
+entrapment, and decoy populations.
 
 ## Registry
 
@@ -122,7 +206,9 @@ The registry public surface is split by concern:
 
 | Module | Principal operations |
 | --- | --- |
-| `registry.indexing` | `rebuild_registry`, `index_fasta`, `list_databases`, `get_database` |
+| `registry.indexing` | `rebuild_registry`, `index_fasta`, `index_inventory_entries`, `list_databases`, `get_database` |
+| `registry_workflow` | `index_database_inventory` |
+| `candidate_analysis` | `resolve_candidate_request`, `run_candidate_analysis` |
 | `registry.backend.factory` | `connect`, backend selection by name/suffix |
 | `registry.comparisons` | `compare_database`, `compare_candidate`, `find_best_overlap` |
 | `registry.pair_metrics` | typed materialized ID/sequence/description/pair counts |
@@ -137,6 +223,22 @@ containment, Jaccard metrics, exact pairs, changed shared IDs, and a relationshi
 Registry schema 11 stores 16-byte sequence hashes and materialized target/contaminant pair rows.
 SQLite is the default; DuckDB is selected by configuration when creating and by `.duckdb` suffix
 when reading. An old schema is refused and must be fully rebuilt.
+
+`run_candidate_analysis()` compares a canonical inventory against an existing registry without
+installing or indexing the candidate. `index_database_inventory()` is the preferred handoff after
+approval because it avoids reparsing the generated FASTA.
+
+## UniProt acquisition
+
+`sync_uniprot_catalog()` creates an immutable canonical Parquet catalog from reference, all, or
+explicit-query proteome selections. `read_uniprot_catalog()`, `filter_uniprot_catalog()`, and
+`latest_uniprot_catalog()` operate locally afterward.
+
+`resolve_uniprot_download()` compiles a taxonomy or proteome-ID selection and a reviewed,
+complete, or canonical-gene acquisition request. `run_uniprot_download()` resolves the proteome,
+streams and validates the FASTA, publishes it atomically, and returns provider query, release,
+reported-count, observed-count, and checksum evidence. Supplying a `UniProtTransport` lets an
+application share transport ownership or substitute a test transport.
 
 ## Writing and summaries
 

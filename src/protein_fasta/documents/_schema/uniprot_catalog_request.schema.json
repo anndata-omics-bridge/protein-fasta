@@ -1,0 +1,102 @@
+{
+  "$defs": {
+    "AllProteomesDocument": {
+      "additionalProperties": false,
+      "description": "Select every UniProt proteome explicitly.",
+      "properties": {
+        "type": {
+          "const": "all",
+          "default": "all",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "title": "AllProteomesDocument",
+      "type": "object"
+    },
+    "ProteomeQueryDocument": {
+      "additionalProperties": false,
+      "description": "Select proteomes using one explicit UniProt provider query.",
+      "properties": {
+        "query": {
+          "minLength": 1,
+          "title": "Query",
+          "type": "string"
+        },
+        "type": {
+          "const": "query",
+          "default": "query",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "query"
+      ],
+      "title": "ProteomeQueryDocument",
+      "type": "object"
+    },
+    "ReferenceProteomesDocument": {
+      "additionalProperties": false,
+      "description": "Select the UniProt reference-proteome catalog.",
+      "properties": {
+        "type": {
+          "const": "reference",
+          "default": "reference",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "title": "ReferenceProteomesDocument",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Request one immutable local snapshot of the UniProt proteome catalog.",
+  "properties": {
+    "output_dir": {
+      "format": "path",
+      "title": "Output Dir",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "0.1",
+      "default": "0.1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "selection": {
+      "discriminator": {
+        "mapping": {
+          "all": "#/$defs/AllProteomesDocument",
+          "query": "#/$defs/ProteomeQueryDocument",
+          "reference": "#/$defs/ReferenceProteomesDocument"
+        },
+        "propertyName": "type"
+      },
+      "oneOf": [
+        {
+          "$ref": "#/$defs/ReferenceProteomesDocument"
+        },
+        {
+          "$ref": "#/$defs/AllProteomesDocument"
+        },
+        {
+          "$ref": "#/$defs/ProteomeQueryDocument"
+        }
+      ],
+      "title": "Selection"
+    },
+    "timeout_seconds": {
+      "default": 120.0,
+      "exclusiveMinimum": 0.0,
+      "title": "Timeout Seconds",
+      "type": "number"
+    }
+  },
+  "required": [
+    "output_dir"
+  ],
+  "title": "UniProtCatalogRequestDocument",
+  "type": "object"
+}

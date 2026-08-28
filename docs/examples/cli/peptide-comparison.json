@@ -1,0 +1,4 @@
+{
+  "schema_version": "0.1",
+  "output_parquet": "out/peptide-comparison.parquet"
+}

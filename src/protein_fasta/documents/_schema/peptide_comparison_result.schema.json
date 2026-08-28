@@ -1,0 +1,120 @@
+{
+  "$defs": {
+    "ArtifactDocument": {
+      "additionalProperties": false,
+      "description": "One versioned, checksummed workflow artifact.",
+      "properties": {
+        "byte_count": {
+          "minimum": 0,
+          "title": "Byte Count",
+          "type": "integer"
+        },
+        "checksum": {
+          "minLength": 1,
+          "title": "Checksum",
+          "type": "string"
+        },
+        "checksum_version": {
+          "minLength": 1,
+          "title": "Checksum Version",
+          "type": "string"
+        },
+        "path": {
+          "format": "path",
+          "title": "Path",
+          "type": "string"
+        },
+        "row_count": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Row Count"
+        },
+        "schema_name": {
+          "minLength": 1,
+          "title": "Schema Name",
+          "type": "string"
+        },
+        "schema_version": {
+          "minLength": 1,
+          "title": "Schema Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "schema_name",
+        "schema_version",
+        "path",
+        "checksum_version",
+        "checksum",
+        "byte_count"
+      ],
+      "title": "ArtifactDocument",
+      "type": "object"
+    },
+    "EffectivePeptideComparisonDocument": {
+      "additionalProperties": false,
+      "description": "Fully resolved peptide comparison destination.",
+      "properties": {
+        "output_parquet": {
+          "format": "path",
+          "title": "Output Parquet",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "0.1",
+          "default": "0.1",
+          "title": "Schema Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "output_parquet"
+      ],
+      "title": "EffectivePeptideComparisonDocument",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Checksummed evidence for one exact peptide comparison.",
+  "properties": {
+    "comparison": {
+      "$ref": "#/$defs/ArtifactDocument"
+    },
+    "effective_request": {
+      "$ref": "#/$defs/EffectivePeptideComparisonDocument"
+    },
+    "peptides_a": {
+      "$ref": "#/$defs/ArtifactDocument"
+    },
+    "peptides_b": {
+      "$ref": "#/$defs/ArtifactDocument"
+    },
+    "protein_fasta_version": {
+      "title": "Protein Fasta Version",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "0.1",
+      "default": "0.1",
+      "title": "Schema Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "protein_fasta_version",
+    "effective_request",
+    "peptides_a",
+    "peptides_b",
+    "comparison"
+  ],
+  "title": "PeptideComparisonResultDocument",
+  "type": "object"
+}

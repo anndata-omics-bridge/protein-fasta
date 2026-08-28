@@ -33,7 +33,7 @@ jobs:
         run: uv python install
 
       - name: Synchronize documentation environment
-        run: uv sync --frozen --group docs --extra cli --extra frame
+        run: uv sync --frozen --group docs --extra cli --extra frame --extra duckdb
 
       - name: Build documentation
         run: uv run --no-sync zensical build --clean --strict

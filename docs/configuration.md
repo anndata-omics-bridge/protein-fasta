@@ -12,12 +12,18 @@ schema-free scalar or Polars runtime values.
 | Entry classifiers | Independent labels and removable decorations | `documents/entry_classifiers/rules.json` |
 | Header format | Recognition and extracted output columns for one database | `documents/frame_formats/<database>/rules.json` |
 | Enzyme | Cleavage expression and stable enzyme identity | `documents/enzymes/<enzyme>/rules.json` |
-| Digestion | Enzyme reference, length range, and missed cleavages | Explicit JSON or build document |
-| Database build profile | Portable naming, metadata, diagnostics, and generation defaults | `documents/build_profiles/fgcz/profile.json` or explicit JSON |
-| Database build request | Per-run sources, identity, destination, and overrides | Explicit JSON |
+| Digestion | Enzyme reference, length range, and missed cleavages | Explicit parameter document |
+| Source preparation | Ordered target, contaminant, and optional foreign FASTA sources | Explicit parameter document |
+| Derived source preparation | Existing source and optional foreign inventories plus role policy | Explicit parameter document |
+| Database build profile | Portable naming, metadata, and diagnostic defaults | `documents/build_profiles/fgcz/profile.json` or explicit parameter document |
+| Biological build request | Per-run identity, destination, and optional entrapment | Explicit parameter document |
 | Effective database build | Fully resolved replay input | Written beside every build |
 | Database build result | Artifacts, checksums, summaries, counts, normalization, and generation evidence | Written beside every build |
-| Registry | Backend and indexing/comparison policy | Explicit JSON |
+| Decoy request | Required reverse, shuffle, or DecoyPYrat strategy and output | Explicit parameter document |
+| Peptide build/comparison | Digestion, executor, and artifact destinations | Explicit parameter document |
+| Candidate review | Comparison threshold, metric, neighbours, and destination | Explicit parameter document |
+| UniProt catalog/download | Proteome selection, acquisition mode, destination, and timeout | Explicit parameter document |
+| Registry | Backend and indexing/comparison policy | Explicit parameter document |
 | Registry diagnostics | Operational FGCZ classifications and decoy prefix | `documents/registry/fgcz.json` |
 
 The packaged diagnostics recognize UniProt, bare UniProt accessions, PDB, RefSeq, GenBank,
@@ -87,25 +93,28 @@ frame = read_configured_protein_frame(
 )
 ```
 
-Committed JSON Schemas for diagnostics, classifiers, header formats, enzymes, digestion,
-database-build profile/request/effective/result documents, registries, and registry diagnostics are packaged under
-`protein_fasta/documents/_schema/`. `make schemas` regenerates them deterministically. Loading names
-the invalid source and reports malformed JSON or model-validation errors before runtime
-compilation.
+Committed JSON Schemas for diagnostics, classifiers, header formats, enzymes, source preparation,
+biological build, decoys, peptides, candidate review, UniProt, registries, and result evidence are
+packaged under `protein_fasta/documents/_schema/`. `make schemas` regenerates them deterministically.
+Loading names the invalid source and reports malformed JSON or model-validation errors before
+runtime compilation.
 
 ## Build configuration
 
-`DatabaseBuildProfileDocument` owns reusable defaults. `DatabaseBuildRequestDocument` owns
-per-run paths, date, naming identity, and explicit generation choices.
+`DatabaseBuildProfileDocument` owns reusable naming, metadata, and diagnostic defaults.
+`DatabaseBuildRequestDocument` owns per-run date, naming identity, destination, and optional
+biological entrapment.
 `resolve_database_build()` applies packaged profile, explicit profile, request, and typed CLI
-precedence and returns an `EffectiveDatabaseBuildDocument` with resolved paths. An explicit
-`"decoy": null` disables a profile decoy default.
+precedence and returns an `EffectiveDatabaseBuildDocument` with resolved paths. Decoy parameters
+are deliberately absent: `DecoyRequestDocument` controls a later operation over the biological
+inventory.
 
 The packaged FGCZ profile is ordinary JSON at
 `documents/build_profiles/fgcz/profile.json`; copy it when a project needs authored defaults.
 Pydantic field defaults remain a final schema fallback, not an invisible application settings
-file. The effective request and final `DatabaseBuildResultDocument` are written beside the FASTA.
-They do not contain registry rows, pair metrics, catalog selection, installation, or GUI state.
+file. The effective request and final `DatabaseBuildResultDocument` are written beside the
+biological FASTA. They do not contain decoy policy, registry rows, pair metrics, catalog selection,
+installation, or GUI state.
 
 The default metadata grammar constructs the first `aa|<dbname>|...` bookkeeping record with
 `CRAPCRAPCRAP` and contaminant section markers with `MRECRAPCRAPCRAP`. These are configuration,
@@ -116,6 +125,64 @@ may use; the defaults are `project`, `dbn`, `description`, and `taxid`. Template
 them, and absent values collapse through the configured separator. Unknown or attribute/index
 expressions, missing filename products, unknown selected templates, and unsupported supplied name
 fields are rejected when the Pydantic document loads rather than during a build.
+
+## UniProt configuration
+
+A catalog request selects reference proteomes by default. All proteomes and an explicit provider
+query are different storage variants, so a query cannot conflict with an `all` switch:
+
+```json
+{
+  "schema_version": "0.1",
+  "selection": {
+    "type": "reference"
+  },
+  "output_dir": "catalog"
+}
+```
+
+A download selects exactly one taxon or one proteome identifier and exactly one acquisition mode.
+The reviewed form is:
+
+```json
+{
+  "schema_version": "0.1",
+  "selection": {
+    "type": "taxid",
+    "taxid": 9606
+  },
+  "acquisition": {
+    "type": "swissprot"
+  },
+  "output_fasta": "human-reviewed.fasta"
+}
+```
+
+Reviewed plus unreviewed and canonical-per-gene requests change only the acquisition member:
+
+```json
+{
+  "type": "swissprot_trembl"
+}
+```
+
+```json
+{
+  "type": "one_seq_per_gene"
+}
+```
+
+Use `{"type": "proteome_id", "proteome_id": "UP000005640"}` instead of the taxid member for
+an explicit proteome. Runtime compilation creates one of two resolution behaviors and one of three
+acquisition behaviors. Invalid cross-mode field combinations are rejected while loading.
+
+## Decoy and peptide configuration
+
+Decoy strategies are separate members. Reverse has no ignored seed or digestion fields; shuffle
+adds a seed; DecoyPYrat adds its collision-digestion policy. A peptide request similarly selects
+one memory, SQLite, or DuckDB execution member with `workers` and `partition_size`. These passive
+documents are compiled once at the workflow root, and every peptide executor returns the same
+canonical peptide and mapping schemas.
 
 ## Registry configuration
 

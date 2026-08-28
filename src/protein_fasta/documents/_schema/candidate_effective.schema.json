@@ -1,0 +1,44 @@
+{
+  "additionalProperties": false,
+  "description": "Fully resolved candidate review request.",
+  "properties": {
+    "clustering_metric": {
+      "enum": [
+        "target_ids",
+        "target_sequences"
+      ],
+      "title": "Clustering Metric",
+      "type": "string"
+    },
+    "neighbour_limit": {
+      "minimum": 1,
+      "title": "Neighbour Limit",
+      "type": "integer"
+    },
+    "output_parquet": {
+      "format": "path",
+      "title": "Output Parquet",
+      "type": "string"
+    },
+    "overlap_threshold": {
+      "maximum": 1.0,
+      "minimum": 0.0,
+      "title": "Overlap Threshold",
+      "type": "number"
+    },
+    "schema_version": {
+      "const": "0.1",
+      "default": "0.1",
+      "title": "Schema Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "output_parquet",
+    "overlap_threshold",
+    "clustering_metric",
+    "neighbour_limit"
+  ],
+  "title": "EffectiveCandidateRequestDocument",
+  "type": "object"
+}

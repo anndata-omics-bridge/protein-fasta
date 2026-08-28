@@ -12,15 +12,23 @@ from protein_fasta.documents import (
     load_builtin_database_build_profile,
     load_builtin_diagnostic_document,
     load_builtin_entry_classifier_document,
+    load_decoy_request,
     load_diagnostic_document,
+    load_protein_input_request,
+    load_uniprot_catalog_request,
+    load_uniprot_download_request,
 )
 from protein_fasta.schema.analytics import DigestionDocument, EnzymeDocument
 from protein_fasta.schema.build import (
-    DatabaseBuildDocument,
     DatabaseBuildProfileDocument,
     DatabaseBuildRequestDocument,
     DatabaseBuildResultDocument,
     EffectiveDatabaseBuildDocument,
+)
+from protein_fasta.schema.decoy import (
+    DecoyRequestDocument,
+    DecoyResultDocument,
+    EffectiveDecoyRequestDocument,
 )
 from protein_fasta.schema.diagnostics import (
     DiagnosticDocument,
@@ -28,12 +36,24 @@ from protein_fasta.schema.diagnostics import (
     EntryClassifierDocument,
 )
 from protein_fasta.schema.frame_formats import HeaderFormatDocument
+from protein_fasta.schema.protein_input import (
+    DerivedProteinInputRequestDocument,
+    DerivedProteinInputResultDocument,
+    ProteinInputRequestDocument,
+    ProteinInputResultDocument,
+)
 from protein_fasta.schema.registry import RegistryDiagnosticDocument, RegistryDocument
+from protein_fasta.schema.uniprot import (
+    UniProtCatalogRequestDocument,
+    UniProtCatalogResultDocument,
+    UniProtDownloadRequestDocument,
+    UniProtDownloadResultDocument,
+)
 
 
 def test_builtin_documents_load_with_stable_versions() -> None:
     profile = load_builtin_database_build_profile()
-    assert profile.schema_version == "0.2"
+    assert profile.schema_version == "0.3"
     assert profile.metadata.tool == "protein-fasta"
     assert load_builtin_diagnostic_document().file_version == "1"
     assert load_builtin_entry_classifier_document().file_version == "2"
@@ -45,6 +65,48 @@ def test_explicit_loader_names_invalid_source_path(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError, match=r"diagnostics\.json"):
         load_diagnostic_document(path)
+
+
+def test_uniprot_request_loaders_validate_discriminated_variants(tmp_path: Path) -> None:
+    catalog_path = tmp_path / "catalog.json"
+    catalog_path.write_text('{"output_dir": "catalog"}', encoding="utf-8")
+    download_path = tmp_path / "download.json"
+    download_path.write_text(
+        '{"selection": {"type": "taxid", "taxid": 9606}, "output_fasta": "human.fasta"}',
+        encoding="utf-8",
+    )
+
+    catalog = load_uniprot_catalog_request(catalog_path)
+    download = load_uniprot_download_request(download_path)
+
+    assert catalog.selection.type == "reference"
+    assert download.selection.type == "taxid"
+    assert download.acquisition.type == "swissprot"
+
+
+def test_protein_input_loader_validates_source_roles(tmp_path: Path) -> None:
+    path = tmp_path / "prepare.json"
+    path.write_text(
+        '{"sources": [{"type": "target", "source_id": "human", '
+        '"path": "human.fasta"}], "output_parquet": "protein-input.parquet"}',
+        encoding="utf-8",
+    )
+
+    request = load_protein_input_request(path)
+
+    assert request.sources[0].type == "target"
+
+
+def test_decoy_loader_requires_one_explicit_strategy(tmp_path: Path) -> None:
+    path = tmp_path / "decoy.json"
+    path.write_text(
+        '{"output_fasta": "search.fasta", "strategy": {"type": "reverse"}}',
+        encoding="utf-8",
+    )
+
+    request = load_decoy_request(path)
+
+    assert request.strategy.type == "reverse"
 
 
 @pytest.mark.parametrize(
@@ -74,18 +136,28 @@ def test_classifier_requires_at_least_one_pattern() -> None:
 @pytest.mark.parametrize(
     ("name", "model"),
     [
-        ("database_build.schema.json", DatabaseBuildDocument),
         ("database_build_effective.schema.json", EffectiveDatabaseBuildDocument),
         ("database_build_profile.schema.json", DatabaseBuildProfileDocument),
         ("database_build_request.schema.json", DatabaseBuildRequestDocument),
         ("database_build_result.schema.json", DatabaseBuildResultDocument),
+        ("decoy_effective.schema.json", EffectiveDecoyRequestDocument),
+        ("decoy_request.schema.json", DecoyRequestDocument),
+        ("decoy_result.schema.json", DecoyResultDocument),
+        ("derived_protein_input_request.schema.json", DerivedProteinInputRequestDocument),
+        ("derived_protein_input_result.schema.json", DerivedProteinInputResultDocument),
         ("diagnostic.schema.json", DiagnosticDocument),
         ("digestion.schema.json", DigestionDocument),
         ("entry_classifier.schema.json", EntryClassifierCatalogDocument),
         ("enzyme.schema.json", EnzymeDocument),
         ("header_format.schema.json", HeaderFormatDocument),
+        ("protein_input_request.schema.json", ProteinInputRequestDocument),
+        ("protein_input_result.schema.json", ProteinInputResultDocument),
         ("registry.schema.json", RegistryDocument),
         ("registry_diagnostic.schema.json", RegistryDiagnosticDocument),
+        ("uniprot_catalog_request.schema.json", UniProtCatalogRequestDocument),
+        ("uniprot_catalog_result.schema.json", UniProtCatalogResultDocument),
+        ("uniprot_download_request.schema.json", UniProtDownloadRequestDocument),
+        ("uniprot_download_result.schema.json", UniProtDownloadResultDocument),
     ],
 )
 def test_committed_json_schema_matches_pydantic(

@@ -1,0 +1,7 @@
+{
+  "schema_version": "0.1",
+  "output_parquet": "out/candidate-comparisons.parquet",
+  "overlap_threshold": 0.99,
+  "clustering_metric": "target_ids",
+  "neighbour_limit": 10
+}

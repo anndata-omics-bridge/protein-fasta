@@ -1,0 +1,146 @@
+{
+  "$defs": {
+    "ContaminantProteinSourceDocument": {
+      "additionalProperties": false,
+      "description": "One ordered named contaminant FASTA source.",
+      "properties": {
+        "block_description": {
+          "default": "",
+          "title": "Block Description",
+          "type": "string"
+        },
+        "block_name": {
+          "minLength": 1,
+          "title": "Block Name",
+          "type": "string"
+        },
+        "path": {
+          "format": "path",
+          "title": "Path",
+          "type": "string"
+        },
+        "source_id": {
+          "minLength": 1,
+          "title": "Source Id",
+          "type": "string"
+        },
+        "type": {
+          "const": "contaminant",
+          "default": "contaminant",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "source_id",
+        "path",
+        "block_name"
+      ],
+      "title": "ContaminantProteinSourceDocument",
+      "type": "object"
+    },
+    "ForeignProteinSourceDocument": {
+      "additionalProperties": false,
+      "description": "One ordered foreign source available to entrapment generation.",
+      "properties": {
+        "path": {
+          "format": "path",
+          "title": "Path",
+          "type": "string"
+        },
+        "source_id": {
+          "minLength": 1,
+          "title": "Source Id",
+          "type": "string"
+        },
+        "type": {
+          "const": "foreign",
+          "default": "foreign",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "source_id",
+        "path"
+      ],
+      "title": "ForeignProteinSourceDocument",
+      "type": "object"
+    },
+    "TargetProteinSourceDocument": {
+      "additionalProperties": false,
+      "description": "One ordered biological target FASTA source.",
+      "properties": {
+        "path": {
+          "format": "path",
+          "title": "Path",
+          "type": "string"
+        },
+        "source_id": {
+          "minLength": 1,
+          "title": "Source Id",
+          "type": "string"
+        },
+        "type": {
+          "const": "target",
+          "default": "target",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "source_id",
+        "path"
+      ],
+      "title": "TargetProteinSourceDocument",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Ordered FASTA sources and destination for one canonical protein input.",
+  "properties": {
+    "output_parquet": {
+      "format": "path",
+      "title": "Output Parquet",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "0.1",
+      "default": "0.1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "sources": {
+      "items": {
+        "discriminator": {
+          "mapping": {
+            "contaminant": "#/$defs/ContaminantProteinSourceDocument",
+            "foreign": "#/$defs/ForeignProteinSourceDocument",
+            "target": "#/$defs/TargetProteinSourceDocument"
+          },
+          "propertyName": "type"
+        },
+        "oneOf": [
+          {
+            "$ref": "#/$defs/TargetProteinSourceDocument"
+          },
+          {
+            "$ref": "#/$defs/ContaminantProteinSourceDocument"
+          },
+          {
+            "$ref": "#/$defs/ForeignProteinSourceDocument"
+          }
+        ]
+      },
+      "minItems": 1,
+      "title": "Sources",
+      "type": "array"
+    }
+  },
+  "required": [
+    "sources",
+    "output_parquet"
+  ],
+  "title": "ProteinInputRequestDocument",
+  "type": "object"
+}

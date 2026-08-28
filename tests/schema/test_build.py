@@ -1,24 +1,23 @@
-"""Tests for database-build storage documents."""
+"""Tests for biological-build storage documents and resolution."""
+
+from __future__ import annotations
 
 import datetime
+import inspect
 from pathlib import Path
 
 import pytest
 from pydantic import ValidationError
 
-from protein_fasta.database_build import (
-    BuildDecoyOverride,
-    DatabaseBuildOverrides,
-    resolve_database_build,
-)
+from protein_fasta.database_build import DatabaseBuildOverrides, resolve_database_build
 from protein_fasta.schema.build import (
-    DatabaseBuildDocument,
     DatabaseBuildProfileDocument,
     DatabaseBuildRequestDocument,
-    DecoyDocument,
-    DecoyMode,
+    EffectiveDatabaseBuildDocument,
+    ForeignSpeciesEntrapmentDocument,
     MetadataDocument,
     NamingDocument,
+    ShuffledEntrapmentDocument,
 )
 
 
@@ -37,30 +36,8 @@ def test_naming_requires_every_filename_product() -> None:
         NamingDocument(filename={"nondecoy": "{dbname}_{date}.{extension}"})
 
 
-def test_build_rejects_unknown_selected_template(tmp_path: Path) -> None:
-    with pytest.raises(ValidationError, match="is not configured"):
-        DatabaseBuildDocument(
-            targets=(tmp_path / "target.fasta",),
-            output_dir=tmp_path,
-            date=datetime.date(2026, 8, 27),
-            name_fields={"description": "demo"},
-            template="unknown",
-        )
-
-
-def test_build_rejects_unknown_name_field(tmp_path: Path) -> None:
-    with pytest.raises(ValidationError, match="name_fields contains unsupported"):
-        DatabaseBuildDocument(
-            targets=(tmp_path / "target.fasta",),
-            output_dir=tmp_path,
-            date=datetime.date(2026, 8, 27),
-            name_fields={"surprise": "demo"},
-        )
-
-
 def _request(**updates: object) -> DatabaseBuildRequestDocument:
     values: dict[str, object] = {
-        "targets": (Path("target.fasta"),),
         "output_dir": Path("out"),
         "date": datetime.date(2026, 8, 27),
         "name_fields": {"description": "demo"},
@@ -75,72 +52,63 @@ def test_build_resolution_records_profile_request_and_cli_precedence(tmp_path: P
     profile = DatabaseBuildProfileDocument(
         metadata=MetadataDocument(org="profile"),
         diagnostics=Path("diagnostics.json"),
-        default_decoy=DecoyDocument(mode=DecoyMode.SHUFFLE, seed=11),
     )
-    request = _request(
-        metadata=MetadataDocument(org="request"),
-        decoy=DecoyDocument(mode=DecoyMode.DECOYPYRAT, seed=17),
-    )
+    request = _request(metadata=MetadataDocument(org="request"))
 
     effective = resolve_database_build(
         profile,
         request,
         profile_base=profile_base,
         request_base=request_base,
-        overrides=DatabaseBuildOverrides(
-            date=datetime.date(2026, 8, 28),
-            decoy=BuildDecoyOverride.REVERSE,
-        ),
+        overrides=DatabaseBuildOverrides(date=datetime.date(2026, 8, 28)),
     )
 
     assert effective.metadata.org == "request"
     assert effective.date == datetime.date(2026, 8, 28)
-    assert effective.decoy is not None
-    assert effective.decoy.mode is DecoyMode.REVERSE
-    assert effective.decoy.seed == 17
-    assert effective.targets == ((request_base / "target.fasta").resolve(),)
     assert effective.output_dir == (request_base / "out").resolve()
     assert effective.diagnostics == (profile_base / "diagnostics.json").resolve()
 
 
-def test_explicit_request_null_disables_profile_decoys(tmp_path: Path) -> None:
-    profile = DatabaseBuildProfileDocument(
-        default_decoy=DecoyDocument(mode=DecoyMode.SHUFFLE, seed=11)
-    )
-    request = _request(decoy=None)
-
-    effective = resolve_database_build(
-        profile,
-        request,
-        profile_base=tmp_path,
-        request_base=tmp_path,
-    )
-
-    assert effective.decoy is None
+def test_effective_build_rejects_unknown_selected_template(tmp_path: Path) -> None:
+    with pytest.raises(ValidationError, match="is not configured"):
+        EffectiveDatabaseBuildDocument(
+            output_dir=tmp_path,
+            date=datetime.date(2026, 8, 27),
+            name_fields={"description": "demo"},
+            template="unknown",
+            naming=NamingDocument(),
+            metadata=MetadataDocument(),
+        )
 
 
-def test_omitted_request_decoy_inherits_profile(tmp_path: Path) -> None:
-    profile = DatabaseBuildProfileDocument(
-        default_decoy=DecoyDocument(mode=DecoyMode.SHUFFLE, seed=11)
-    )
-
-    effective = resolve_database_build(
-        profile,
-        _request(),
-        profile_base=tmp_path,
-        request_base=tmp_path,
-    )
-
-    assert effective.decoy == profile.default_decoy
+def test_effective_build_rejects_unknown_name_field(tmp_path: Path) -> None:
+    with pytest.raises(ValidationError, match="name_fields contains unsupported"):
+        EffectiveDatabaseBuildDocument(
+            output_dir=tmp_path,
+            date=datetime.date(2026, 8, 27),
+            name_fields={"surprise": "demo"},
+            template="project",
+            naming=NamingDocument(),
+            metadata=MetadataDocument(),
+        )
 
 
-def test_cli_none_override_disables_request_decoys(tmp_path: Path) -> None:
-    effective = resolve_database_build(
-        DatabaseBuildProfileDocument(),
-        _request(decoy=DecoyDocument(mode=DecoyMode.SHUFFLE)),
-        profile_base=tmp_path,
-        request_base=tmp_path,
-        overrides=DatabaseBuildOverrides(decoy=BuildDecoyOverride.NONE),
-    )
+def test_biological_build_documents_expose_no_decoy_policy() -> None:
+    for model in (
+        DatabaseBuildProfileDocument,
+        DatabaseBuildRequestDocument,
+        EffectiveDatabaseBuildDocument,
+    ):
+        assert "decoy" not in model.model_fields
+    assert "decoy" not in inspect.signature(DatabaseBuildOverrides).parameters
 
-    assert effective.decoy is None
+
+def test_entrapment_variants_reject_fields_owned_by_the_other_strategy() -> None:
+    with pytest.raises(ValidationError, match="reject_shared_foreign"):
+        ShuffledEntrapmentDocument.model_validate(
+            {"type": "shuffled", "reject_shared_foreign": False}
+        )
+    with pytest.raises(ValidationError, match="fix_peptide_n_term"):
+        ForeignSpeciesEntrapmentDocument.model_validate(
+            {"type": "foreign_species", "fix_peptide_n_term": False}
+        )

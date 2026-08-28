@@ -1,0 +1,259 @@
+{
+  "$defs": {
+    "ArtifactDocument": {
+      "additionalProperties": false,
+      "description": "One versioned, checksummed workflow artifact.",
+      "properties": {
+        "byte_count": {
+          "minimum": 0,
+          "title": "Byte Count",
+          "type": "integer"
+        },
+        "checksum": {
+          "minLength": 1,
+          "title": "Checksum",
+          "type": "string"
+        },
+        "checksum_version": {
+          "minLength": 1,
+          "title": "Checksum Version",
+          "type": "string"
+        },
+        "path": {
+          "format": "path",
+          "title": "Path",
+          "type": "string"
+        },
+        "row_count": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Row Count"
+        },
+        "schema_name": {
+          "minLength": 1,
+          "title": "Schema Name",
+          "type": "string"
+        },
+        "schema_version": {
+          "minLength": 1,
+          "title": "Schema Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "schema_name",
+        "schema_version",
+        "path",
+        "checksum_version",
+        "checksum",
+        "byte_count"
+      ],
+      "title": "ArtifactDocument",
+      "type": "object"
+    },
+    "CandidateCountsDocument": {
+      "additionalProperties": false,
+      "description": "Candidate size and registry comparison availability.",
+      "properties": {
+        "candidate_contaminants": {
+          "minimum": 0,
+          "title": "Candidate Contaminants",
+          "type": "integer"
+        },
+        "candidate_records": {
+          "minimum": 0,
+          "title": "Candidate Records",
+          "type": "integer"
+        },
+        "candidate_targets": {
+          "minimum": 0,
+          "title": "Candidate Targets",
+          "type": "integer"
+        },
+        "checked_databases": {
+          "minimum": 0,
+          "title": "Checked Databases",
+          "type": "integer"
+        },
+        "contaminant_comparisons": {
+          "minimum": 0,
+          "title": "Contaminant Comparisons",
+          "type": "integer"
+        },
+        "excluded_metadata_databases": {
+          "minimum": 0,
+          "title": "Excluded Metadata Databases",
+          "type": "integer"
+        },
+        "target_comparisons": {
+          "minimum": 0,
+          "title": "Target Comparisons",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "candidate_records",
+        "candidate_targets",
+        "candidate_contaminants",
+        "checked_databases",
+        "excluded_metadata_databases",
+        "target_comparisons",
+        "contaminant_comparisons"
+      ],
+      "title": "CandidateCountsDocument",
+      "type": "object"
+    },
+    "CandidateNeighbourhoodDocument": {
+      "additionalProperties": false,
+      "description": "Deterministic candidate-neighbour clustering evidence.",
+      "properties": {
+        "excluded_empty_paths": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Excluded Empty Paths",
+          "type": "array"
+        },
+        "leaf_order": {
+          "items": {
+            "type": "integer"
+          },
+          "title": "Leaf Order",
+          "type": "array"
+        },
+        "merge_count": {
+          "minimum": 0,
+          "title": "Merge Count",
+          "type": "integer"
+        },
+        "metric": {
+          "enum": [
+            "target_ids",
+            "target_sequences"
+          ],
+          "title": "Metric",
+          "type": "string"
+        },
+        "omitted_metadata_paths": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Omitted Metadata Paths",
+          "type": "array"
+        },
+        "relative_paths": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Relative Paths",
+          "type": "array"
+        }
+      },
+      "required": [
+        "metric",
+        "relative_paths",
+        "excluded_empty_paths",
+        "leaf_order",
+        "omitted_metadata_paths",
+        "merge_count"
+      ],
+      "title": "CandidateNeighbourhoodDocument",
+      "type": "object"
+    },
+    "EffectiveCandidateRequestDocument": {
+      "additionalProperties": false,
+      "description": "Fully resolved candidate review request.",
+      "properties": {
+        "clustering_metric": {
+          "enum": [
+            "target_ids",
+            "target_sequences"
+          ],
+          "title": "Clustering Metric",
+          "type": "string"
+        },
+        "neighbour_limit": {
+          "minimum": 1,
+          "title": "Neighbour Limit",
+          "type": "integer"
+        },
+        "output_parquet": {
+          "format": "path",
+          "title": "Output Parquet",
+          "type": "string"
+        },
+        "overlap_threshold": {
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Overlap Threshold",
+          "type": "number"
+        },
+        "schema_version": {
+          "const": "0.1",
+          "default": "0.1",
+          "title": "Schema Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "output_parquet",
+        "overlap_threshold",
+        "clustering_metric",
+        "neighbour_limit"
+      ],
+      "title": "EffectiveCandidateRequestDocument",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Evidence for one completed, non-mutating candidate comparison.",
+  "properties": {
+    "candidate_inventory": {
+      "$ref": "#/$defs/ArtifactDocument"
+    },
+    "comparisons": {
+      "$ref": "#/$defs/ArtifactDocument"
+    },
+    "counts": {
+      "$ref": "#/$defs/CandidateCountsDocument"
+    },
+    "effective_request": {
+      "$ref": "#/$defs/EffectiveCandidateRequestDocument"
+    },
+    "neighbourhood": {
+      "$ref": "#/$defs/CandidateNeighbourhoodDocument"
+    },
+    "protein_fasta_version": {
+      "title": "Protein Fasta Version",
+      "type": "string"
+    },
+    "registry": {
+      "$ref": "#/$defs/ArtifactDocument"
+    },
+    "schema_version": {
+      "const": "0.1",
+      "default": "0.1",
+      "title": "Schema Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "protein_fasta_version",
+    "effective_request",
+    "candidate_inventory",
+    "registry",
+    "comparisons",
+    "counts",
+    "neighbourhood"
+  ],
+  "title": "CandidateResultDocument",
+  "type": "object"
+}

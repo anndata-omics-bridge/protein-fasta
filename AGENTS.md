@@ -32,13 +32,15 @@ The closest `AGENTS.md` wins. Explicit user instructions override this file.
 ## Dependency rules
 
 `protein_fasta` has an explicit inward dependency structure. The outer `cli.py` adapter may compose
-the root products. `database_build.py` owns reusable file assembly; `build/` owns only naming,
-metadata records, and generation. `analytics/` owns backend-free hashing, digestion, comparison,
-and clustering and never imports build or persistence. `registry/` owns indexing, comparison
-queries, schema versioning, snapshots, and concrete SQLite/optional DuckDB adapters. `record.py`,
-`frame.py`, `writing.py`, and `summary.py` retain their focused products. The inward leaf packages
-are `analytics`, `reading`, `validation`, `diagnostics`, `frame_formats`, and `schema`; the
-exhaustive contracts in `.importlinter` are the executable definition.
+the root products. `protein_input.py` and `database_build.py` own source preparation and biological
+assembly; `decoy_database.py` owns the subsequent search-database operation. `build/` owns only
+naming, metadata records, and sequence-generation behavior. `analytics/` owns backend-free
+hashing, digestion, comparison, and clustering and never imports build or persistence.
+`registry/` owns indexing, comparison queries, schema versioning, snapshots, and concrete
+SQLite/optional DuckDB adapters. `uniprot/` and `peptide/` own their focused runtime capabilities;
+root workflow modules compose them with storage documents and artifacts. `record.py`, `frame.py`,
+`reading/`, and `summary.py` retain their focused products. The exhaustive contracts in
+`.importlinter` are the executable definition.
 
 Pydantic documents are passive and live in `schema/`; loading and compilation occur at root
 boundaries. Polars is restricted to the optional CLI/frame and registry-export boundary. Scalar

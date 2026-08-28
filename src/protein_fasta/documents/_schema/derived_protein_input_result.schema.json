@@ -1,0 +1,249 @@
+{
+  "$defs": {
+    "ArtifactDocument": {
+      "additionalProperties": false,
+      "description": "One versioned, checksummed workflow artifact.",
+      "properties": {
+        "byte_count": {
+          "minimum": 0,
+          "title": "Byte Count",
+          "type": "integer"
+        },
+        "checksum": {
+          "minLength": 1,
+          "title": "Checksum",
+          "type": "string"
+        },
+        "checksum_version": {
+          "minLength": 1,
+          "title": "Checksum Version",
+          "type": "string"
+        },
+        "path": {
+          "format": "path",
+          "title": "Path",
+          "type": "string"
+        },
+        "row_count": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Row Count"
+        },
+        "schema_name": {
+          "minLength": 1,
+          "title": "Schema Name",
+          "type": "string"
+        },
+        "schema_version": {
+          "minLength": 1,
+          "title": "Schema Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "schema_name",
+        "schema_version",
+        "path",
+        "checksum_version",
+        "checksum",
+        "byte_count"
+      ],
+      "title": "ArtifactDocument",
+      "type": "object"
+    },
+    "DerivedProteinInputCountsDocument": {
+      "additionalProperties": false,
+      "description": "Selected and deliberately excluded rows from the source inventories.",
+      "properties": {
+        "contaminant": {
+          "minimum": 0,
+          "title": "Contaminant",
+          "type": "integer"
+        },
+        "foreign": {
+          "minimum": 0,
+          "title": "Foreign",
+          "type": "integer"
+        },
+        "skipped_decoy": {
+          "minimum": 0,
+          "title": "Skipped Decoy",
+          "type": "integer"
+        },
+        "skipped_entrapment": {
+          "minimum": 0,
+          "title": "Skipped Entrapment",
+          "type": "integer"
+        },
+        "skipped_sentinel": {
+          "minimum": 0,
+          "title": "Skipped Sentinel",
+          "type": "integer"
+        },
+        "target": {
+          "minimum": 0,
+          "title": "Target",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "target",
+        "contaminant",
+        "foreign",
+        "skipped_sentinel",
+        "skipped_entrapment",
+        "skipped_decoy"
+      ],
+      "title": "DerivedProteinInputCountsDocument",
+      "type": "object"
+    },
+    "DerivedProteinInputRequestDocument": {
+      "additionalProperties": false,
+      "description": "Select clean biological rows from existing database inventories.",
+      "properties": {
+        "foreign_inventory": {
+          "anyOf": [
+            {
+              "format": "path",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Foreign Inventory"
+        },
+        "foreign_source_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Foreign Source Id"
+        },
+        "output_parquet": {
+          "format": "path",
+          "title": "Output Parquet",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "0.1",
+          "default": "0.1",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "source_id": {
+          "minLength": 1,
+          "title": "Source Id",
+          "type": "string"
+        },
+        "source_inventory": {
+          "format": "path",
+          "title": "Source Inventory",
+          "type": "string"
+        }
+      },
+      "required": [
+        "source_inventory",
+        "source_id",
+        "output_parquet"
+      ],
+      "title": "DerivedProteinInputRequestDocument",
+      "type": "object"
+    },
+    "DerivedProteinInputSourceEvidenceDocument": {
+      "additionalProperties": false,
+      "description": "One canonical inventory consumed while deriving clean source rows.",
+      "properties": {
+        "artifact": {
+          "$ref": "#/$defs/ArtifactDocument"
+        },
+        "purpose": {
+          "enum": [
+            "biological",
+            "foreign"
+          ],
+          "title": "Purpose",
+          "type": "string"
+        },
+        "source_id": {
+          "title": "Source Id",
+          "type": "string"
+        },
+        "source_order": {
+          "minimum": 0,
+          "title": "Source Order",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "source_id",
+        "source_order",
+        "purpose",
+        "artifact"
+      ],
+      "title": "DerivedProteinInputSourceEvidenceDocument",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Evidence for one inventory-to-protein-input derivation.",
+  "properties": {
+    "counts": {
+      "$ref": "#/$defs/DerivedProteinInputCountsDocument"
+    },
+    "effective_request": {
+      "$ref": "#/$defs/DerivedProteinInputRequestDocument"
+    },
+    "protein_fasta_version": {
+      "title": "Protein Fasta Version",
+      "type": "string"
+    },
+    "protein_input": {
+      "$ref": "#/$defs/ArtifactDocument"
+    },
+    "schema_version": {
+      "const": "0.1",
+      "default": "0.1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "sources": {
+      "items": {
+        "$ref": "#/$defs/DerivedProteinInputSourceEvidenceDocument"
+      },
+      "title": "Sources",
+      "type": "array"
+    },
+    "warnings": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "title": "Warnings",
+      "type": "array"
+    }
+  },
+  "required": [
+    "protein_fasta_version",
+    "effective_request",
+    "protein_input",
+    "sources",
+    "counts"
+  ],
+  "title": "DerivedProteinInputResultDocument",
+  "type": "object"
+}

@@ -4,15 +4,13 @@ The assembly operation is a Python port of prozor's ``create_fgcz_fasta_db``.
 
 Assembly order mirrors prozor:
 
-    [db sentinel] + targets + [contaminants] + [entrapment] + decoys(all of those)
+    [db sentinel] + targets + [contaminants] + [entrapment]
 
 with two FGCZ-convention additions from the newer collection: an ``aa|`` database
 sentinel as the first entry, and an ``aa|Cont_...`` section marker before each
-contaminant set's block. Decoys are generated for targets **and** contaminants
-**and** entrapment records, but NOT for the metadata entries. Entrapment records
-belong to the target space, so they are generated before the decoys rather than
-after: decoying only the biological entries would leave a target space the decoy
-space does not cover.
+contaminant set's block. Entrapment records belong to the biological target
+space. Decoy generation is deliberately absent here and consumes the resulting
+protein inventory through the separate ``decoy_database`` workflow.
 
 Every input sequence is normalized first -- upper-cased, one trailing stop removed
 -- so what is written, what is decoyed, and what deduplication compares are the same
@@ -26,56 +24,54 @@ from __future__ import annotations
 
 import datetime
 import importlib.metadata
-import json
 import os
 import tempfile
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, replace
-from enum import StrEnum
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from loguru import logger
 
 from protein_fasta.analytics.hashing import FILE_CHECKSUM_VERSION, file_checksum, sequence_hash
-from protein_fasta.build.generation.decoy import (
-    DEFAULT_DECOY_SPEC,
-    make_decoy_generation,
-)
-from protein_fasta.build.generation.decoy_types import DecoyBatch, DecoyGeneration
+from protein_fasta.artifact_io import publish_exclusive, temporary_sibling, write_json_atomic
 from protein_fasta.build.metadata import build_section_marker_header, build_sentinel_header
 from protein_fasta.build.naming import build_dbname, build_fasta_name
+from protein_fasta.database.models import (
+    BiologicalDatabase,
+    ProteinInventoryEntry,
+    SourceRole,
+)
 from protein_fasta.diagnostics.messages import describe_illegal_residues
 from protein_fasta.diagnostics.runtime import DiagnosticRules
 from protein_fasta.reading.header import parse_header
 from protein_fasta.reading.parser import FastaRecord
+from protein_fasta.reading.writer import write_records
 from protein_fasta.registry.classification import ContaminantBlockState, classify_record
 from protein_fasta.registry.kinds import EntryKind
 from protein_fasta.registry.rules import RegistryDiagnosticRules, load_registry_diagnostics
+from protein_fasta.schema.artifacts import ArtifactDocument
 from protein_fasta.schema.build import (
-    BuildArtifactDocument,
+    BiologicalEntrapmentDocument,
     DatabaseBuildCountsDocument,
-    DatabaseBuildDecoyEvidenceDocument,
-    DatabaseBuildDocument,
     DatabaseBuildEntrapmentEvidenceDocument,
     DatabaseBuildNormalizationDocument,
     DatabaseBuildProfileDocument,
     DatabaseBuildRequestDocument,
     DatabaseBuildResultDocument,
     DatabaseBuildSummaryDocument,
-    DecoyDocument,
-    DecoyMode,
     EffectiveDatabaseBuildDocument,
     EntrapmentDocument,
+    EntrapmentStrategy,
+    ForeignSpeciesEntrapmentDocument,
     MetadataDocument,
     NamingDocument,
 )
 from protein_fasta.summary import FastaSummary, summarize_sequences
 from protein_fasta.validation.sequence import normalize_sequence
-from protein_fasta.writing import write_records
 
 if TYPE_CHECKING:
-    from fdr_benchmark.models import PeptidePairRecord
+    import polars as pl
 
     from protein_fasta.build.generation.entrapment import (
         EntrapmentBatch,
@@ -102,13 +98,6 @@ def _make_entrapment_generation(spec: EntrapmentDocument) -> EntrapmentGeneratio
     return make_entrapment_generation(spec)
 
 
-def _format_entrapment_pairs(pairs: tuple[PeptidePairRecord, ...]) -> str:
-    """Format mappings through the package that generated them."""
-    from fdr_benchmark.provenance import format_peptide_pairs
-
-    return format_peptide_pairs(pairs)
-
-
 @dataclass(frozen=True, slots=True)
 class ContaminantBlock:
     """One resolved contaminant module supplied to the build pipeline."""
@@ -116,6 +105,16 @@ class ContaminantBlock:
     name: str
     description: str
     entries: tuple[Entry, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class ProteinSourceProvenance:
+    """Prepared-source coordinates retained for one biological identifier."""
+
+    source_order: int
+    record_order: int
+    source_id: str
+    source_role: SourceRole
 
 
 @dataclass(frozen=True)
@@ -165,15 +164,7 @@ class PipelineResult:
     upper_cased_entries: int = 0
     stop_stripped_entries: int = 0
     duplicates_dropped: int = 0
-
-
-class BuildDecoyOverride(StrEnum):
-    """Typed CLI/API override for the configured decoy stage."""
-
-    NONE = "none"
-    REVERSE = DecoyMode.REVERSE.value
-    SHUFFLE = DecoyMode.SHUFFLE.value
-    DECOYPYRAT = DecoyMode.DECOYPYRAT.value
+    database: BiologicalDatabase | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -181,7 +172,6 @@ class DatabaseBuildOverrides:
     """Common explicitly supplied values that take precedence over JSON."""
 
     date: datetime.date | None = None
-    decoy: BuildDecoyOverride | None = None
 
 
 DEFAULT_BUILD_OVERRIDES = DatabaseBuildOverrides()
@@ -192,26 +182,12 @@ class DatabaseBuildExecution:
     """Runtime result and its durable JSON evidence paths."""
 
     result: PipelineResult
+    database: BiologicalDatabase
     document: DatabaseBuildResultDocument
+    protein_input_path: Path
+    inventory_path: Path
     effective_request_path: Path
     result_path: Path
-
-
-def _decoy_build_evidence(
-    generation: DecoyGeneration | None,
-    batch: DecoyBatch,
-) -> DecoyBuildEvidence | None:
-    if generation is None:
-        return None
-    return DecoyBuildEvidence(
-        mode=generation.mode.value,
-        seed=generation.seed,
-        parameters=batch.parameters,
-        initial_collisions=batch.initial_collisions,
-        unresolved_collisions=batch.unresolved_collisions,
-        dropped_peptides=batch.dropped_peptides,
-        omitted_decoys=batch.omitted_decoys,
-    )
 
 
 def _entrapment_build_evidence(
@@ -249,14 +225,7 @@ def resolve_database_build(
         profile_base=profile_base,
         request_base=request_base,
     )
-    decoy = _resolved_decoy(profile, request, overrides.decoy)
-    entrapment = (
-        request.entrapment
-        if "entrapment" in request.model_fields_set
-        else profile.default_entrapment
-    )
     return EffectiveDatabaseBuildDocument(
-        targets=tuple(_resolved_path(path, request_base) for path in request.targets),
         output_dir=_resolved_path(request.output_dir, request_base),
         date=overrides.date or request.date,
         name_fields=request.name_fields,
@@ -264,131 +233,174 @@ def resolve_database_build(
         naming=naming,
         metadata=metadata,
         diagnostics=diagnostics,
-        contaminant_blocks=tuple(
-            block.model_copy(update={"path": _resolved_path(block.path, request_base)})
-            for block in request.contaminant_blocks
-        ),
-        decoy=decoy,
-        entrapment=entrapment,
-        foreign_sources=tuple(
-            _resolved_path(path, request_base) for path in request.foreign_sources
-        ),
+        entrapment=request.entrapment,
         annotation=request.annotation,
         installer=request.installer,
     )
 
 
-def run_database_build(effective: EffectiveDatabaseBuildDocument) -> DatabaseBuildExecution:
+def run_database_build(
+    protein_input_path: Path,
+    effective: EffectiveDatabaseBuildDocument,
+    /,
+) -> DatabaseBuildExecution:
     """Read one effective request, build its FASTA, and persist typed evidence."""
     effective.output_dir.mkdir(parents=True, exist_ok=True)
     expected_name = build_fasta_name(
         config=effective.naming,
         template=effective.template,
         date=effective.date,
-        decoy=effective.decoy is not None,
+        decoy=False,
         entrapment=effective.entrapment is not None,
         **effective.name_fields,
     )
     expected_path = effective.output_dir / expected_name
     effective_path = expected_path.with_suffix(f"{expected_path.suffix}.effective.json")
-    _write_json_atomic(effective_path, effective.model_dump(mode="json"))
+    inventory_path = expected_path.with_suffix(f"{expected_path.suffix}.protein-inventory.parquet")
+    pairs_path = expected_path.with_suffix(f"{expected_path.suffix}.entrapment-pairs.parquet")
+    result_path = expected_path.with_suffix(f"{expected_path.suffix}.result.json")
+    _refuse_existing_build_artifacts(
+        expected_path,
+        inventory_path,
+        result_path,
+        *((pairs_path,) if effective.entrapment is not None else ()),
+    )
+    write_json_atomic(
+        effective_path,
+        effective.model_dump(mode="json"),
+        replace_existing=True,
+    )
 
-    target_entries = _entries_from_paths(effective.targets)
-    foreign_entries = _entries_from_paths(effective.foreign_sources)
-    blocks = tuple(
-        ContaminantBlock(
-            name=block.name,
-            description=block.description,
-            entries=tuple(_entries_from_paths((block.path,))),
-        )
-        for block in effective.contaminant_blocks
+    input_path = protein_input_path.resolve()
+    target_entries, blocks, foreign_entries, source_provenance = _sources_from_protein_input(
+        input_path
     )
 
     diagnostics = load_registry_diagnostics(effective.diagnostics)
-    result = build_database(
-        targets=target_entries,
-        name_fields=effective.name_fields,
-        naming=effective.naming,
-        metadata=effective.metadata,
-        diagnostics=diagnostics,
-        output_dir=effective.output_dir,
-        date=effective.date,
-        template=effective.template,
-        contaminant_blocks=blocks,
-        decoy_spec=effective.decoy,
-        entrapment_spec=effective.entrapment,
-        foreign_entries=foreign_entries,
-        annotation=effective.annotation,
-        installer=effective.installer,
-    )
-    input_paths = (
-        *effective.targets,
-        *(block.path for block in effective.contaminant_blocks),
-        *effective.foreign_sources,
-    )
-    inventory_path = result.path.with_suffix(f"{result.path.suffix}.protein-inventory.parquet")
-    inventory_rows = _write_protein_inventory(result, diagnostics, inventory_path)
-    result_document = _result_document(
-        effective,
+    with tempfile.TemporaryDirectory(
+        prefix=f".{expected_name}.",
+        dir=effective.output_dir,
+    ) as staging_name:
+        staging_dir = Path(staging_name)
+        staged_result = build_database(
+            targets=target_entries,
+            name_fields=effective.name_fields,
+            naming=effective.naming,
+            metadata=effective.metadata,
+            diagnostics=diagnostics,
+            output_dir=staging_dir,
+            date=effective.date,
+            template=effective.template,
+            contaminant_blocks=blocks,
+            entrapment_spec=_legacy_entrapment_spec(effective.entrapment),
+            foreign_entries=foreign_entries,
+            annotation=effective.annotation,
+            installer=effective.installer,
+            source_provenance=source_provenance,
+        )
+        if staged_result.database is None:
+            raise AssertionError("biological assembly did not return its canonical database")
+        database = staged_result.database
+        staged_inventory = staging_dir / inventory_path.name
+        inventory_rows = write_protein_inventory(staged_result, staged_inventory)
+        final_pairs = pairs_path if staged_result.entrapment_pairs_path is not None else None
+        result = replace(
+            staged_result,
+            path=expected_path,
+            entrapment_pairs_path=final_pairs,
+        )
+        result_document = _result_document(
+            effective,
+            result,
+            effective_path,
+            input_path,
+            inventory_path,
+            inventory_rows,
+            fasta_artifact_path=staged_result.path,
+            inventory_artifact_path=staged_inventory,
+            pairs_artifact_path=staged_result.entrapment_pairs_path,
+        )
+        publications = [(staged_result.path, expected_path), (staged_inventory, inventory_path)]
+        if staged_result.entrapment_pairs_path is not None:
+            publications.append((staged_result.entrapment_pairs_path, pairs_path))
+        published: list[Path] = []
+        try:
+            for staged, destination in publications:
+                publish_exclusive(staged, destination)
+                published.append(destination)
+            write_json_atomic(
+                result_path,
+                result_document.model_dump(mode="json"),
+                replace_existing=False,
+            )
+        except BaseException:
+            for path in published:
+                path.unlink(missing_ok=True)
+            raise
+    return DatabaseBuildExecution(
         result,
-        effective_path,
-        input_paths,
+        database,
+        result_document,
+        input_path,
         inventory_path,
-        inventory_rows,
+        effective_path,
+        result_path,
     )
-    result_path = result.path.with_suffix(f"{result.path.suffix}.result.json")
-    _write_json_atomic(result_path, result_document.model_dump(mode="json"))
-    return DatabaseBuildExecution(result, result_document, effective_path, result_path)
 
 
-def _write_protein_inventory(
+def run_database_build_from_frame(
+    frame: pl.DataFrame,
+    effective: EffectiveDatabaseBuildDocument,
+    /,
+) -> DatabaseBuildExecution:
+    """Persist one canonical frame for replay, then run the artifact build use case."""
+    from protein_fasta.inventory import validate_protein_input_frame
+
+    validate_protein_input_frame(frame)
+    expected_name = build_fasta_name(
+        config=effective.naming,
+        template=effective.template,
+        date=effective.date,
+        decoy=False,
+        entrapment=effective.entrapment is not None,
+        **effective.name_fields,
+    )
+    input_path = (effective.output_dir / expected_name).with_suffix(
+        f"{Path(expected_name).suffix}.protein-input.parquet"
+    )
+    if input_path.exists():
+        raise FileExistsError(f"refusing to replace frame build input: {input_path}")
+    effective.output_dir.mkdir(parents=True, exist_ok=True)
+    with temporary_sibling(input_path) as staged:
+        frame.write_parquet(staged)
+        publish_exclusive(staged, input_path)
+    try:
+        return run_database_build(input_path, effective)
+    except BaseException:
+        input_path.unlink(missing_ok=True)
+        raise
+
+
+def write_protein_inventory(
     result: PipelineResult,
-    diagnostics: RegistryDiagnosticRules,
     path: Path,
 ) -> int:
-    """Write the final FASTA order and operational provenance as Parquet."""
-    try:
-        import polars as pl
-    except ModuleNotFoundError as error:
-        if error.name == "polars":
-            message = "protein inventory output requires the 'protein-fasta[frame]' extra"
-            raise RuntimeError(message) from error
-        raise
-    rows: list[dict[str, object]] = []
-    block_state: ContaminantBlockState | None = None
-    for order, record in enumerate(_read_existing_records(result.path)):
-        header = parse_header(record.raw_header)
-        _, classifications = diagnostics.rules.diagnose_identifier(header.id)
-        kind, contaminant_group, block_state = classify_record(
-            record.raw_header,
-            classifications,
-            block_state,
-            diagnostics.decoy_prefix,
-        )
-        rows.append(
-            {
-                "final_order": order,
-                "raw_header": record.raw_header,
-                "id": header.id,
-                "description": header.description,
-                "sequence": record.sequence,
-                "kind": kind.value,
-                "contaminant_group": contaminant_group,
-                "sequence_hash": sequence_hash(record.sequence).hex(),
-                "decoy_mode": (
-                    result.decoy.mode
-                    if kind is EntryKind.DECOY and result.decoy is not None
-                    else None
-                ),
-                "entrapment_strategy": (
-                    result.entrapment.strategy
-                    if kind is EntryKind.ENTRAPMENT and result.entrapment is not None
-                    else None
-                ),
-            }
-        )
-    pl.DataFrame(rows).write_parquet(path)
-    return len(rows)
+    """Write the exact canonical tuple used for one biological FASTA."""
+    from protein_fasta.inventory import biological_database_frame
+
+    if result.database is None:
+        raise ValueError("pipeline result has no canonical biological database")
+    with temporary_sibling(path) as staged:
+        biological_database_frame(result.database).write_parquet(staged)
+        publish_exclusive(staged, path)
+    return len(result.database.entries)
+
+
+def _refuse_existing_build_artifacts(*paths: Path) -> None:
+    existing = [path for path in paths if path.exists()]
+    if existing:
+        names = ", ".join(str(path) for path in existing)
+        raise FileExistsError(f"refusing to replace existing biological-build artifacts: {names}")
 
 
 def _resolved_path(path: Path, base: Path) -> Path:
@@ -408,35 +420,90 @@ def _resolved_profile_or_request_path(
     return None if profile_path is None else _resolved_path(profile_path, profile_base)
 
 
-def _resolved_decoy(
-    profile: DatabaseBuildProfileDocument,
-    request: DatabaseBuildRequestDocument,
-    override: BuildDecoyOverride | None,
-) -> DecoyDocument | None:
-    configured = request.decoy if "decoy" in request.model_fields_set else profile.default_decoy
-    if override is None:
-        return configured
-    if override is BuildDecoyOverride.NONE:
+def _sources_from_protein_input(
+    path: Path,
+) -> tuple[
+    list[Entry],
+    tuple[ContaminantBlock, ...],
+    list[Entry],
+    dict[str, ProteinSourceProvenance],
+]:
+    """Project one validated canonical input frame into biological source groups."""
+    from protein_fasta.inventory import read_protein_input
+
+    frame = read_protein_input(path)
+    targets: list[Entry] = []
+    foreign: list[Entry] = []
+    block_order: list[str] = []
+    block_descriptions: dict[str, str] = {}
+    block_entries: dict[str, list[Entry]] = {}
+    provenance: dict[str, ProteinSourceProvenance] = {}
+    for row in frame.iter_rows(named=True):
+        entry = (str(row["raw_header"]), str(row["sequence"]))
+        role = str(row["role"])
+        identifier = str(row["id"])
+        provenance.setdefault(
+            identifier,
+            ProteinSourceProvenance(
+                source_order=int(str(row["source_order"])),
+                record_order=int(str(row["record_order"])),
+                source_id=str(row["source_id"]),
+                source_role=cast("SourceRole", role),
+            ),
+        )
+        if role == "target":
+            targets.append(entry)
+        elif role == "foreign":
+            foreign.append(entry)
+        elif role == "contaminant":
+            block_name = row["block_name"]
+            if not isinstance(block_name, str) or not block_name:
+                raise ValueError(f"protein-input {path} has a contaminant row without a block name")
+            if block_name not in block_entries:
+                block_order.append(block_name)
+                block_entries[block_name] = []
+                description = row["block_description"]
+                block_descriptions[block_name] = description if isinstance(description, str) else ""
+            block_entries[block_name].append(entry)
+        else:
+            raise ValueError(f"protein-input {path} has unsupported biological role {role!r}")
+    if not targets:
+        raise ValueError(f"protein-input {path} contains no target rows")
+    blocks = tuple(
+        ContaminantBlock(
+            name=name,
+            description=block_descriptions[name],
+            entries=tuple(block_entries[name]),
+        )
+        for name in block_order
+    )
+    return targets, blocks, foreign, provenance
+
+
+def _legacy_entrapment_spec(
+    spec: BiologicalEntrapmentDocument | None,
+) -> EntrapmentDocument | None:
+    """Compile strategy-specific biological storage into the current runtime request."""
+    if spec is None:
         return None
-    base = configured or DecoyDocument()
-    return base.model_copy(update={"mode": DecoyMode(override.value)})
-
-
-def _entries_from_paths(paths: tuple[Path, ...]) -> list[Entry]:
-    return [
-        (record.raw_header, record.sequence)
-        for path in paths
-        for record in _read_existing_records(path)
-    ]
-
-
-def _read_existing_records(path: Path) -> Iterable[FastaRecord]:
-    from protein_fasta.reading.parser import read_records
-
-    try:
-        return read_records(path)
-    except OSError as error:
-        raise ValueError(f"cannot read database-build source {path}: {error}") from error
+    if isinstance(spec, ForeignSpeciesEntrapmentDocument):
+        return EntrapmentDocument(
+            strategy=EntrapmentStrategy.FOREIGN_SPECIES,
+            fold=spec.fold,
+            seed=spec.seed,
+            digestion=spec.digestion,
+            normalize_i_to_l=spec.normalize_i_to_l,
+            reject_shared_foreign=spec.reject_shared_foreign,
+        )
+    return EntrapmentDocument(
+        strategy=EntrapmentStrategy.SHUFFLED,
+        fold=spec.fold,
+        seed=spec.seed,
+        digestion=spec.digestion,
+        fix_peptide_n_term=spec.fix_peptide_n_term,
+        fix_peptide_c_term=spec.fix_peptide_c_term,
+        normalize_i_to_l=spec.normalize_i_to_l,
+    )
 
 
 def _artifact(
@@ -446,11 +513,12 @@ def _artifact(
     schema_name: str,
     schema_version: str,
     row_count: int | None = None,
-) -> BuildArtifactDocument:
-    return BuildArtifactDocument(
+    recorded_path: Path | None = None,
+) -> ArtifactDocument:
+    return ArtifactDocument(
         schema_name=schema_name,
         schema_version=schema_version,
-        path=Path(os.path.relpath(path, start=relative_to)),
+        path=Path(os.path.relpath(recorded_path or path, start=relative_to)),
         checksum_version=FILE_CHECKSUM_VERSION,
         checksum=file_checksum(path),
         byte_count=path.stat().st_size,
@@ -462,9 +530,13 @@ def _result_document(
     effective: EffectiveDatabaseBuildDocument,
     result: PipelineResult,
     effective_path: Path,
-    input_paths: tuple[Path, ...],
+    input_path: Path,
     inventory_path: Path,
     inventory_rows: int,
+    *,
+    fasta_artifact_path: Path | None = None,
+    inventory_artifact_path: Path | None = None,
+    pairs_artifact_path: Path | None = None,
 ) -> DatabaseBuildResultDocument:
     summary = result.summary
     frequencies = (
@@ -475,55 +547,23 @@ def _result_document(
         if summary.total_residues
         else {}
     )
-    artifacts = [
+    sidecars = [
         _artifact(
             effective_path,
             relative_to=effective.output_dir,
             schema_name="effective-database-build",
             schema_version=effective.schema_version,
-        ),
-        *(
-            _artifact(
-                path,
-                relative_to=effective.output_dir,
-                schema_name="protein-fasta-input",
-                schema_version="1",
-            )
-            for path in input_paths
-        ),
-        _artifact(
-            result.path,
-            relative_to=effective.output_dir,
-            schema_name="protein-fasta",
-            schema_version="1",
-            row_count=result.n_total,
-        ),
-        _artifact(
-            inventory_path,
-            relative_to=effective.output_dir,
-            schema_name="protein-inventory",
-            schema_version="1",
-            row_count=inventory_rows,
-        ),
+        )
     ]
     if result.entrapment_pairs_path is not None:
-        artifacts.append(
+        sidecars.append(
             _artifact(
-                result.entrapment_pairs_path,
+                pairs_artifact_path or result.entrapment_pairs_path,
                 relative_to=effective.output_dir,
-                schema_name="entrapment-pairs-tsv",
-                schema_version="legacy-1",
+                schema_name="entrapment-pairs",
+                schema_version="1",
+                recorded_path=result.entrapment_pairs_path,
             )
-        )
-    decoy = None
-    if result.decoy is not None:
-        decoy = DatabaseBuildDecoyEvidenceDocument(
-            mode=result.decoy.mode,
-            seed=result.decoy.seed,
-            initial_collisions=result.decoy.initial_collisions,
-            unresolved_collisions=result.decoy.unresolved_collisions,
-            dropped_peptides=result.decoy.dropped_peptides,
-            omitted_decoys=result.decoy.omitted_decoys,
         )
     entrapment = None
     if result.entrapment is not None:
@@ -539,12 +579,33 @@ def _result_document(
     return DatabaseBuildResultDocument(
         protein_fasta_version=importlib.metadata.version("protein_fasta"),
         effective_request=effective,
-        artifacts=tuple(artifacts),
+        input_artifact=_artifact(
+            input_path,
+            relative_to=effective.output_dir,
+            schema_name="protein-input",
+            schema_version="1",
+        ),
+        biological_fasta=_artifact(
+            fasta_artifact_path or result.path,
+            relative_to=effective.output_dir,
+            schema_name="biological-fasta",
+            schema_version="1",
+            row_count=result.n_total,
+            recorded_path=result.path,
+        ),
+        protein_inventory=_artifact(
+            inventory_artifact_path or inventory_path,
+            relative_to=effective.output_dir,
+            schema_name="protein-inventory",
+            schema_version="1",
+            row_count=inventory_rows,
+            recorded_path=inventory_path,
+        ),
+        sidecar_artifacts=tuple(sidecars),
         counts=DatabaseBuildCountsDocument(
             target=result.n_target,
             contaminant=result.n_contaminant,
             entrapment=result.n_entrapment,
-            decoy=result.n_decoy,
             total=result.n_total,
         ),
         normalization=DatabaseBuildNormalizationDocument(
@@ -564,28 +625,8 @@ def _result_document(
             aa_counts=summary.aa_frequencies,
             aa_frequencies=frequencies,
         ),
-        decoy=decoy,
         entrapment=entrapment,
     )
-
-
-def _write_json_atomic(path: Path, payload: object) -> None:
-    descriptor, temporary_name = tempfile.mkstemp(
-        prefix=f".{path.name}.",
-        suffix=".tmp",
-        dir=path.parent,
-    )
-    os.close(descriptor)
-    temporary_path = Path(temporary_name)
-    try:
-        temporary_path.write_text(
-            json.dumps(payload, indent=2, sort_keys=True) + "\n",
-            encoding="utf-8",
-        )
-        os.replace(temporary_path, path)
-    except BaseException:
-        temporary_path.unlink(missing_ok=True)
-        raise
 
 
 def _normalize_entries(
@@ -684,20 +725,19 @@ def build_database(
     date: datetime.date,
     template: str | None = None,
     contaminant_blocks: Iterable[ContaminantBlock] = (),
-    decoy_spec: DecoyDocument | None = DEFAULT_DECOY_SPEC,
     entrapment_spec: EntrapmentDocument | None = None,
     foreign_entries: Iterable[Entry] = (),
     annotation: str = "",
     installer: str | None = None,
+    source_provenance: Mapping[str, ProteinSourceProvenance] | None = None,
 ) -> PipelineResult:
-    """Build a FASTA database from resolved sources and compiled policy.
+    """Build a decoy-free biological FASTA from resolved sources and policy.
 
     ``name_fields`` are substituted into the chosen naming ``template`` (e.g.
     ``{"project": 42261, "dbn": 1, "description": "human"}``). ``targets`` is
     consumed once; pass a list if you need to reuse it.
     """
     resolved_blocks = list(contaminant_blocks)
-    decoy_generation = None if decoy_spec is None else make_decoy_generation(decoy_spec)
     entrapment_generation: EntrapmentGeneration | None = (
         None if entrapment_spec is None else _make_entrapment_generation(entrapment_spec)
     )
@@ -709,7 +749,7 @@ def build_database(
         config=naming,
         template=template,
         date=date,
-        decoy=decoy_generation is not None,
+        decoy=False,
         entrapment=entrapment_spec is not None,
         **name_fields,
     )
@@ -724,6 +764,7 @@ def build_database(
         diagnostics.rules,
         source="Selected targets",
     )
+    target_list = _without_existing_packaging(target_list, diagnostics)
     normalized_blocks: list[ContaminantBlock] = []
     for block in resolved_blocks:
         block_entries, block_upper, block_stops = _normalize_entries(
@@ -733,7 +774,9 @@ def build_database(
         )
         upper_cased += block_upper
         stop_stripped += block_stops
-        normalized_blocks.append(replace(block, entries=tuple(block_entries)))
+        normalized_blocks.append(
+            replace(block, entries=tuple(_without_existing_packaging(block_entries, diagnostics)))
+        )
     resolved_blocks = normalized_blocks
     normalized_foreign, foreign_upper, foreign_stops = _normalize_entries(
         foreign_entries,
@@ -743,6 +786,7 @@ def build_database(
     upper_cased += foreign_upper
     stop_stripped += foreign_stops
     foreign_entries = normalized_foreign
+    foreign_entries = _without_existing_packaging(foreign_entries, diagnostics)
     if entrapment_generation is not None:
         target_list = list(entrapment_generation.normalize(tuple(target_list)))
         resolved_blocks = [
@@ -764,26 +808,6 @@ def build_database(
         entrapment_note = entrapment_generation.annotation(entrapment_batch)
         annotation = f"{annotation}; {entrapment_note}" if annotation else entrapment_note
 
-    decoy_source, _, _ = _deduplicate_by_id(
-        [target_list, contaminant_entries, list(entrapment_entries)]
-    )
-    decoy_batch = DecoyBatch(
-        (),
-        {} if decoy_generation is None else decoy_generation.parameters(),
-    )
-    if decoy_generation is not None:
-        prefix = diagnostics.decoy_prefix
-        decoy_batch = decoy_generation.generate(tuple(decoy_source), prefix=prefix)
-    decoys = decoy_batch.entries
-
-    if decoy_generation is not None:
-        decoy_note = decoy_generation.annotation(
-            initial_collisions=decoy_batch.initial_collisions,
-            dropped_peptides=decoy_batch.dropped_peptides,
-        )
-        if decoy_note:
-            annotation = f"{annotation}; {decoy_note}" if annotation else decoy_note
-
     # Assemble in prozor order with marker-delimited contaminant blocks, deduplicating
     # by id across the whole file (first occurrence wins, matching prozor's
     # !duplicated). The category counts are the survivors of dedup, so they always
@@ -794,7 +818,6 @@ def build_database(
         [(sentinel_header, sentinel_cfg.body_sequence)],
         target_list,
     ]
-    contaminant_group_indexes: list[int] = []
     for block in resolved_blocks:
         marker_header = build_section_marker_header(
             f"Cont_{block.name}",
@@ -803,25 +826,35 @@ def build_database(
         )
         groups.append([(marker_header, sentinel_cfg.marker_body_sequence)])
         groups.append(block.entries)
-        contaminant_group_indexes.append(len(groups) - 1)
     groups.append(entrapment_entries)
-    entrapment_group_index = len(groups) - 1
-    groups.append(decoys)
-
-    final, survivor_counts, duplicates_dropped = _deduplicate_by_id(groups)
-    n_target = survivor_counts[1]
-    n_contaminant = sum(survivor_counts[index] for index in contaminant_group_indexes)
-    n_entrapment = survivor_counts[entrapment_group_index]
-    n_decoy = survivor_counts[-1]
-
-    out_path = output_dir / filename
-    write_records(
-        (FastaRecord(raw_header=header, sequence=sequence) for header, sequence in final),
-        out_path,
+    final, _, duplicates_dropped = _deduplicate_by_id(groups)
+    database = BiologicalDatabase(
+        _protein_inventory_entries(
+            final,
+            diagnostics,
+            source_provenance or {},
+            None if entrapment_generation is None else entrapment_generation.strategy.value,
+        )
     )
+    n_target = sum(entry.kind == EntryKind.TARGET.value for entry in database.entries)
+    n_contaminant = sum(entry.kind == EntryKind.CONTAMINANT.value for entry in database.entries)
+    n_entrapment = sum(entry.kind == EntryKind.ENTRAPMENT.value for entry in database.entries)
+    n_decoy = 0
+    out_path = output_dir / filename
+    with temporary_sibling(out_path) as staged_fasta:
+        write_records(
+            (
+                FastaRecord(raw_header=entry.raw_header, sequence=entry.sequence)
+                for entry in database.entries
+            ),
+            staged_fasta,
+        )
+        publish_exclusive(staged_fasta, out_path)
 
     pairs_path: Path | None = None
     if entrapment_batch is not None and entrapment_batch.peptide_pairs:
+        from protein_fasta.inventory import entrapment_pair_frame
+
         # Beside the FASTA and named for it: the later FDP evaluation has nothing
         # to join search results on without this mapping, and a sidecar travels
         # with the database the way the build manifest already does.
@@ -830,12 +863,22 @@ def build_database(
         # because a foreign protein is not peptide-paired with the target it
         # entraps, and a header-only file would claim a pairing that does not
         # exist -- which a paired FDP estimate would then silently be run against.
-        pairs_path = out_path.with_suffix(f"{out_path.suffix}.entrapment_pairs.tsv")
-        pairs_path.write_text(
-            _format_entrapment_pairs(entrapment_batch.peptide_pairs), encoding="utf-8"
-        )
+        pairs_path = out_path.with_suffix(f"{out_path.suffix}.entrapment-pairs.parquet")
+        with temporary_sibling(pairs_path) as staged_pairs:
+            entrapment_pair_frame(
+                [
+                    {
+                        "source_id": pair.source_id,
+                        "target_peptide": pair.target_peptide,
+                        "generated_peptide": pair.generated_peptide,
+                        "fold_index": pair.fold_index,
+                    }
+                    for pair in entrapment_batch.peptide_pairs
+                ]
+            ).write_parquet(staged_pairs)
+            publish_exclusive(staged_pairs, pairs_path)
 
-    summary = summarize_sequences(seq for _, seq in final)
+    summary = summarize_sequences(_scientific_sequences(final, diagnostics))
     logger.info(
         "built {}: {} target + {} contaminant + {} entrapment + {} decoy = {} entries",
         out_path.name,
@@ -845,7 +888,6 @@ def build_database(
         n_decoy,
         len(final),
     )
-    decoy_evidence = _decoy_build_evidence(decoy_generation, decoy_batch)
     entrapment_evidence = _entrapment_build_evidence(entrapment_generation, entrapment_batch)
     return PipelineResult(
         path=out_path,
@@ -856,90 +898,106 @@ def build_database(
         n_total=len(final),
         contaminant_sets=[block.name for block in resolved_blocks],
         summary=summary,
-        decoy=decoy_evidence,
+        decoy=None,
         n_entrapment=n_entrapment,
         entrapment=entrapment_evidence,
         entrapment_pairs_path=pairs_path,
         upper_cased_entries=upper_cased,
         stop_stripped_entries=stop_stripped,
         duplicates_dropped=duplicates_dropped,
+        database=database,
     )
 
 
-def build_manifest(
-    request: DatabaseBuildDocument,
-    result: PipelineResult,
-    input_paths: tuple[Path, ...],
-) -> dict[str, object]:
-    """Return reproducibility evidence for one completed database build."""
-    return {
-        "schema_version": "0.1",
-        "protein_fasta_version": importlib.metadata.version("protein_fasta"),
-        "request": request.model_dump(mode="json"),
-        "inputs": [
-            {
-                "path": str(path),
-                "checksum_version": FILE_CHECKSUM_VERSION,
-                "checksum": file_checksum(path),
-            }
-            for path in input_paths
-        ],
-        "output": {
-            "path": str(result.path),
-            "checksum_version": FILE_CHECKSUM_VERSION,
-            "checksum": file_checksum(result.path),
-        },
-        "counts": {
-            "target": result.n_target,
-            "contaminant": result.n_contaminant,
-            "entrapment": result.n_entrapment,
-            "decoy": result.n_decoy,
-            "total": result.n_total,
-        },
-        "normalization": {
-            "upper_cased": result.upper_cased_entries,
-            "terminal_stops_stripped": result.stop_stripped_entries,
-            "duplicates_dropped": result.duplicates_dropped,
-        },
-        "decoy": {} if result.decoy is None else result.decoy.parameters,
-        "entrapment": None
-        if result.entrapment is None
-        else {
-            "strategy": result.entrapment.strategy,
-            "seed": result.entrapment.seed,
-            "requested_fold": result.entrapment.requested_fold,
-            "achieved_fold": result.entrapment.achieved_fold,
-            "failures": result.entrapment.failures,
-        },
-    }
-
-
-def write_build_manifest(
-    request: DatabaseBuildDocument,
-    result: PipelineResult,
-    input_paths: tuple[Path, ...],
-) -> Path:
-    """Atomically write a reproducibility manifest beside a completed FASTA."""
-    manifest_path = result.path.with_suffix(f"{result.path.suffix}.manifest.json")
-    descriptor, temporary_name = tempfile.mkstemp(
-        prefix=f".{manifest_path.name}.",
-        suffix=".tmp",
-        dir=manifest_path.parent,
-    )
-    os.close(descriptor)
-    temporary_path = Path(temporary_name)
-    try:
-        temporary_path.write_text(
-            json.dumps(
-                build_manifest(request, result, input_paths),
-                indent=2,
-                sort_keys=True,
-            )
-            + "\n",
-            encoding="utf-8",
+def _without_existing_packaging(
+    records: Iterable[Entry],
+    diagnostics: RegistryDiagnosticRules,
+) -> list[Entry]:
+    """Remove pre-existing sentinel and decoy records from a biological source."""
+    biological: list[Entry] = []
+    block_state: ContaminantBlockState | None = None
+    for raw_header, sequence in records:
+        header = parse_header(raw_header)
+        _, classifications = diagnostics.rules.diagnose_identifier(header.id)
+        kind, _group, block_state = classify_record(
+            raw_header,
+            classifications,
+            block_state,
+            diagnostics.decoy_prefix,
         )
-        os.replace(temporary_path, manifest_path)
-    except BaseException:
-        temporary_path.unlink(missing_ok=True)
-        raise
-    return manifest_path
+        if kind not in {EntryKind.SENTINEL, EntryKind.DECOY}:
+            biological.append((raw_header, sequence))
+    return biological
+
+
+def _protein_inventory_entries(
+    records: Iterable[Entry],
+    diagnostics: RegistryDiagnosticRules,
+    provenance_by_id: Mapping[str, ProteinSourceProvenance],
+    entrapment_strategy: str | None,
+) -> tuple[ProteinInventoryEntry, ...]:
+    """Project final biological records once into immutable inventory entries."""
+    entries: list[ProteinInventoryEntry] = []
+    block_state: ContaminantBlockState | None = None
+    for order, (raw_header, sequence) in enumerate(records):
+        header = parse_header(raw_header)
+        _, classifications = diagnostics.rules.diagnose_identifier(header.id)
+        kind, contaminant_group, block_state = classify_record(
+            raw_header,
+            classifications,
+            block_state,
+            diagnostics.decoy_prefix,
+        )
+        if kind is EntryKind.DECOY:
+            raise ValueError(f"biological assembly classified {header.id!r} as a decoy")
+        provenance = provenance_by_id.get(header.id)
+        generated_entrapment = provenance is None and kind is EntryKind.ENTRAPMENT
+        entries.append(
+            ProteinInventoryEntry(
+                final_order=order,
+                raw_header=raw_header,
+                identifier=header.id,
+                description=header.description,
+                sequence=sequence,
+                kind=kind.value,
+                contaminant_group=contaminant_group,
+                sequence_hash=sequence_hash(sequence).hex(),
+                entrapment_strategy=(entrapment_strategy if kind is EntryKind.ENTRAPMENT else None),
+                source_order=None if provenance is None else provenance.source_order,
+                record_order=None if provenance is None else provenance.record_order,
+                source_id=(
+                    "generated-entrapment"
+                    if generated_entrapment
+                    else None
+                    if provenance is None
+                    else provenance.source_id
+                ),
+                source_role=(
+                    "entrapment"
+                    if generated_entrapment
+                    else None
+                    if provenance is None
+                    else provenance.source_role
+                ),
+            )
+        )
+    return tuple(entries)
+
+
+def _scientific_sequences(
+    entries: Iterable[Entry],
+    diagnostics: RegistryDiagnosticRules,
+) -> Iterable[str]:
+    """Yield biological sequences while excluding sentinels and section markers."""
+    block_state: ContaminantBlockState | None = None
+    for raw_header, sequence in entries:
+        header = parse_header(raw_header)
+        _, classifications = diagnostics.rules.diagnose_identifier(header.id)
+        kind, _group, block_state = classify_record(
+            raw_header,
+            classifications,
+            block_state,
+            diagnostics.decoy_prefix,
+        )
+        if kind in {EntryKind.TARGET, EntryKind.CONTAMINANT, EntryKind.ENTRAPMENT}:
+            yield sequence

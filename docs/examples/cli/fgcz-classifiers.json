@@ -1,0 +1,26 @@
+{
+  "schema_version": "0.1",
+  "file_version": "walkthrough-1",
+  "classifiers": [
+    {
+      "name": "decoy",
+      "output_column": "is_decoy",
+      "match_patterns": [],
+      "removable_prefix_patterns": [
+        "^REV_"
+      ],
+      "removable_suffix_patterns": []
+    },
+    {
+      "name": "contaminant",
+      "output_column": "is_contaminant",
+      "match_patterns": [
+        "^(?:sp|tr)\\|Cont_"
+      ],
+      "removable_prefix_patterns": [
+        "^CON__"
+      ],
+      "removable_suffix_patterns": []
+    }
+  ]
+}
