@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import datetime
-from enum import StrEnum
 from pathlib import Path
 from string import Formatter
 from typing import Annotated, Literal
@@ -99,44 +98,6 @@ class MetadataDocument(DocumentBase):
     tool: str = "fasta_gen"
     installer: str = ""
     org: str = "fgcz"
-
-
-class DecoyMode(StrEnum):
-    """Supported protein-decoy generation algorithms."""
-
-    REVERSE = "reverse"
-    SHUFFLE = "shuffle"
-    DECOYPYRAT = "decoypyrat"
-
-
-class DecoyDocument(DocumentBase):
-    """Validated decoy mode, stochastic seed, and collision digestion."""
-
-    mode: DecoyMode = DecoyMode.REVERSE
-    seed: int = 2000
-    digestion: DigestionDocument = Field(default_factory=DigestionDocument)
-
-
-class EntrapmentStrategy(StrEnum):
-    """Supported entrapment generation algorithms."""
-
-    SHUFFLED = "shuffled"
-    FOREIGN_SPECIES = "foreign-species"
-
-
-class EntrapmentDocument(DocumentBase):
-    """Entrapment strategy, multiplicity, seed, and collision digestion."""
-
-    strategy: EntrapmentStrategy = EntrapmentStrategy.SHUFFLED
-    fold: int = Field(default=1, ge=1, le=10)
-    seed: int = 2000
-    digestion: DigestionDocument = Field(
-        default_factory=lambda: DigestionDocument(missed_cleavages=1)
-    )
-    fix_peptide_n_term: bool = True
-    fix_peptide_c_term: bool = True
-    normalize_i_to_l: bool = False
-    reject_shared_foreign: bool = True
 
 
 class ShuffledEntrapmentDocument(DocumentBase):

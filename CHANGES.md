@@ -1,5 +1,11 @@
 # Changes
 
+- 2026-08-30: Began the final database-runtime cutover. Decoy and entrapment strategy documents now
+  compile once at root boundaries into schema-independent runtime behavior; database naming and
+  metadata have explicit runtime values; biological build results no longer contain decoy fields;
+  and in-memory target, contaminant, and foreign sources use the same canonical protein-input
+  preparation as file requests. Removed the superseded `build/` implementation tree.
+
 - 2026-08-30: Made request-driven Cyclopts workflows direct-first. Common CLI arguments now author
   a validated non-overwriting `*.request.json` before computation; `--request` explicitly replays
   it and `--output` redirects replay products. Added explicit diagnostic and enzyme-rule CLI paths,

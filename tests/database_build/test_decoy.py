@@ -2,28 +2,20 @@ from __future__ import annotations
 
 from typing import cast
 
-import pytest
 from fdr_benchmark.digestion import digest as benchmark_digest
 from fdr_benchmark.models import DigestionSpec
 
 from protein_fasta.analytics.digestion import digest_sequence
 from protein_fasta.analytics_compile import make_digestion
-from protein_fasta.build.generation.decoy import (
-    decoy_annotation,
-    decoy_parameters,
-    decoy_sequence,
-    generate_decoys,
-    make_decoy,
-    make_decoy_generation,
-)
+from protein_fasta.database.decoy import DecoyMode, make_decoy, reverse_sequence
+from protein_fasta.decoy_compile import make_decoy_generation
 from protein_fasta.schema.analytics import DigestionDocument
-from protein_fasta.schema.build import DecoyDocument as DecoySpec
-from protein_fasta.schema.build import DecoyMode
+from protein_fasta.schema.decoy import DecoyPyratDocument, ShuffleDecoyDocument
 from protein_fasta.summary import SummaryAccumulator, summarize_sequences
 
 
 def test_reverse_is_plain_reversal() -> None:
-    assert decoy_sequence("PEPTIDE", "reverse") == "EDITPEP"
+    assert reverse_sequence("PEPTIDE") == "EDITPEP"
 
 
 def test_make_decoy_prefixes_description_and_reverses_sequence() -> None:
@@ -34,10 +26,8 @@ def test_make_decoy_prefixes_description_and_reverses_sequence() -> None:
 
 def test_shuffle_mode_preserves_composition() -> None:
     original = "PEPTIDEKR"
-    batch = generate_decoys(
-        (("sp|P1|ONE protein", original),),
-        prefix="REV_",
-        spec=DecoySpec(mode=DecoyMode.SHUFFLE, seed=7),
+    batch = make_decoy_generation(ShuffleDecoyDocument(seed=7)).generate(
+        (("sp|P1|ONE protein", original),), prefix="REV_"
     )
     description, shuffled = batch.entries[0]
     assert description == "REV_sp|P1|ONE protein"
@@ -46,7 +36,7 @@ def test_shuffle_mode_preserves_composition() -> None:
 
 
 def test_compiled_shuffle_owns_generation_provenance_and_annotation() -> None:
-    generation = make_decoy_generation(DecoySpec(mode=DecoyMode.SHUFFLE, seed=7))
+    generation = make_decoy_generation(ShuffleDecoyDocument(seed=7))
 
     batch = generation.generate((("sp|P1|ONE protein", "PEPTIDEKR"),), prefix="REV_")
 
@@ -56,22 +46,14 @@ def test_compiled_shuffle_owns_generation_provenance_and_annotation() -> None:
     assert "decoys shuffle seed 7 with fdr_benchmark" in generation.annotation()
 
 
-def test_non_reverse_single_sequence_api_is_rejected() -> None:
-    with pytest.raises(ValueError, match="generate_decoys"):
-        decoy_sequence("PEPTIDE", "shuffle")
-
-
 def test_decoypyrat_preserves_headers_and_reports_collisions() -> None:
-    batch = generate_decoys(
-        (("sp|P1|ONE protein", "MIPK"),),
-        prefix="REV_",
-        spec=DecoySpec(mode=DecoyMode.DECOYPYRAT, seed=3),
+    batch = make_decoy_generation(DecoyPyratDocument(seed=3)).generate(
+        (("sp|P1|ONE protein", "MIPK"),), prefix="REV_"
     )
     assert batch.entries[0][0] == "REV_sp|P1|ONE protein"
-    assert (
-        batch.parameters["digestion"]["enzyme"]
-        == make_digestion(DigestionDocument()).cleavage.pattern
-    )
+    digestion = batch.parameters["digestion"]
+    assert isinstance(digestion, dict)
+    assert digestion["enzyme"] == make_digestion(DigestionDocument()).cleavage.pattern
     assert batch.unresolved_collisions == 0
 
 
@@ -83,7 +65,7 @@ def test_decoypyrat_collision_universe_matches_the_application_digester() -> Non
     explicitly rather than by name.
     """
     config = DigestionDocument(min_length=7, max_length=50, missed_cleavages=0)
-    generation = make_decoy_generation(DecoySpec(mode=DecoyMode.DECOYPYRAT, digestion=config))
+    generation = make_decoy_generation(DecoyPyratDocument(seed=2000, digestion=config))
     parameters = generation.parameters()
     digestion = parameters["digestion"]
     assert isinstance(digestion, dict)
@@ -110,25 +92,26 @@ def test_decoypyrat_collision_universe_matches_the_application_digester() -> Non
 
 
 def test_decoypyrat_digestion_follows_the_configured_length_window() -> None:
-    spec = DecoySpec(
-        mode=DecoyMode.DECOYPYRAT,
+    spec = DecoyPyratDocument(
+        seed=2000,
         digestion=DigestionDocument(min_length=9, max_length=40, missed_cleavages=2),
     )
-    parameters = decoy_parameters(spec)
+    generation = make_decoy_generation(spec)
+    parameters = generation.parameters()
+    digestion = parameters["digestion"]
+    assert isinstance(digestion, dict)
 
-    assert parameters["digestion"]["min_length"] == 9
-    assert parameters["digestion"]["max_length"] == 40
+    assert digestion["min_length"] == 9
+    assert digestion["max_length"] == 40
     # DecoyPYrat replaces whole fully cleaved segments, so the collision
     # universe stays fully cleaved even when peptide analysis allows misses.
-    assert parameters["digestion"]["missed_cleavages"] == 0
-    assert "length 9-40" in decoy_annotation(spec)
+    assert digestion["missed_cleavages"] == 0
+    assert "length 9-40" in generation.annotation()
 
 
 def test_decoypyrat_drops_a_peptide_that_admits_no_replacement() -> None:
-    batch = generate_decoys(
-        (("p", "PEPTIDEKAAAAAAA"), ("t", "AAAAAAK")),
-        prefix="REV_",
-        spec=DecoySpec(mode=DecoyMode.DECOYPYRAT),
+    batch = make_decoy_generation(DecoyPyratDocument(seed=2000)).generate(
+        (("p", "PEPTIDEKAAAAAAA"), ("t", "AAAAAAK")), prefix="REV_"
     )
 
     # The decoy of p digests into AAAAAAK and AEDITPEP. AAAAAAK is a target and
@@ -142,10 +125,8 @@ def test_decoypyrat_drops_a_peptide_that_admits_no_replacement() -> None:
 
 
 def test_decoypyrat_omits_a_decoy_left_with_no_sequence() -> None:
-    batch = generate_decoys(
-        (("p", "AAAAAAA"),),
-        prefix="REV_",
-        spec=DecoySpec(mode=DecoyMode.DECOYPYRAT),
+    batch = make_decoy_generation(DecoyPyratDocument(seed=2000)).generate(
+        (("p", "AAAAAAA"),), prefix="REV_"
     )
 
     # The protein is a single unreplaceable peptide, so there is no decoy to

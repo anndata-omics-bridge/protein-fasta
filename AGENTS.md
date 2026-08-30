@@ -33,9 +33,11 @@ The closest `AGENTS.md` wins. Explicit user instructions override this file.
 
 `protein_fasta` has an explicit inward dependency structure. The outer `cli.py` adapter may compose
 the root products. `protein_input.py` and `database_build.py` own source preparation and biological
-assembly; `decoy_database.py` owns the subsequent search-database operation. `build/` owns only
-naming, metadata records, and sequence-generation behavior. `analytics/` owns backend-free
-hashing, digestion, comparison, and clustering and never imports build or persistence.
+assembly; `decoy_database.py` owns the subsequent search-database operation. `database/` owns
+schema-independent naming, metadata, and sequence-generation behavior; root
+`database_compile.py` and `decoy_compile.py` translate passive documents into those runtime
+values. `analytics/` owns backend-free hashing, digestion, comparison, and clustering and never
+imports database construction or persistence.
 `registry/` owns indexing, comparison queries, schema versioning, snapshots, and concrete
 SQLite/optional DuckDB adapters. `uniprot/` and `peptide/` own their focused runtime capabilities;
 root workflow modules compose them with storage documents and artifacts. `record.py`, `frame.py`,

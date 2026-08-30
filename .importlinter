@@ -12,10 +12,10 @@ exhaustive = True
 layers =
     cli
     candidate_analysis | database_build | decoy_database | decoy_report | diagnostic_summary | peptide_workflow | protein_input | uniprot_download | uniprot_catalog
-    registry_workflow
+    database_compile | decoy_compile | registry_workflow
     peptide
     registry
-    build | inventory | record | frame | summary | artifact_io | uniprot
+    inventory | record | frame | summary | artifact_io | uniprot
     database
     analytics_compile
     compile | frame_compile | documents
@@ -32,15 +32,15 @@ layers =
     sqlite | duckdb
     base | schema
 
-[importlinter:contract:build-components]
-name = Generation is independent from naming and metadata rendering
+[importlinter:contract:database-components]
+name = Database runtime components depend inward
 type = layers
 containers =
-    protein_fasta.build
+    protein_fasta.database
 exhaustive = True
 layers =
-    generation
-    metadata | naming
+    decoy_advanced
+    decoy | entrapment | metadata | models | naming
 
 [importlinter:contract:registry-components]
 name = Registry queries depend on independent backend and kind values

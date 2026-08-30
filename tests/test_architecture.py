@@ -5,7 +5,7 @@ from pathlib import Path
 
 _CHILDREN = {
     "analytics",
-    "build",
+    "database",
     "diagnostics",
     "frame_formats",
     "peptide",
@@ -21,6 +21,8 @@ _MULTI_CHILD_COMPOSERS = {
     "cli",
     "compile",
     "database_build",
+    "database_compile",
+    "decoy_compile",
     "decoy_database",
     "decoy_report",
     "frame",

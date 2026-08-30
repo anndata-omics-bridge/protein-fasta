@@ -150,20 +150,20 @@ search = run_decoy_generation(
 
 The execution returns a `SearchDatabase`, search FASTA, search-inventory Parquet, and typed
 effective/result evidence. Reverse, shuffle, and DecoyPYrat are explicit strategy document
-variants compiled at the workflow boundary. The current implementation still converts that union
-through the older `DecoyDocument`; `decoy_database` and `decoy_report` duplicate that conversion.
-This is a migration residual, while `DecoyGeneration` remains the runtime behavior contract.
+variants compiled once by `decoy_compile.make_decoy_generation()` at the workflow boundary.
+`DecoyGeneration` is the schema-independent runtime behavior contract shared by database
+generation and diagnostic comparison.
 
 The low-level `build_database()` accepts already-resolved target, contaminant, and optional
 foreign-source entries plus:
 
-- `NamingDocument` for database and filename construction;
-- `MetadataDocument` for the `aa|` sentinel and contaminant section markers;
+- compiled `DatabaseNaming` for database and filename construction;
+- compiled `DatabaseMetadata` for the `aa|` sentinel and contaminant section markers;
 - compiled `RegistryDiagnosticRules` for residue checks; and
 - optional biological entrapment behavior.
 
 It normalizes once, rejects one identifier with conflicting sequences, deduplicates identical
-records, writes deterministic FASTA output, and returns `PipelineResult`. It does not create
+records, writes deterministic FASTA output, and returns `BiologicalBuildResult`. It does not create
 decoys, resolve a contaminant catalog, install into a site collection, or update a registry.
 
 New callers should not assemble that low-level parameter list. Use the workflow API or the

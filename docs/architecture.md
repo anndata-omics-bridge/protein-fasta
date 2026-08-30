@@ -32,7 +32,7 @@ workflow composition roots
  |
  v
 domain and persistence packages
-(database, peptide, registry, uniprot, build)
+(database, peptide, registry, uniprot)
  |
  v
 focused computation and I/O
@@ -58,8 +58,9 @@ folder rule described below.
 | `analytics/` | Backend-free hashes, digestion, comparisons, and clustering |
 | `analytics_compile.py` | Enzyme/digestion document compilation |
 | `database/`, `inventory.py` | Typed biological/search values and canonical Parquet projection |
-| `build/naming.py`, `build/metadata.py` | Database naming and `aa|` metadata construction |
-| `build/generation/` | Decoy and biological-entrapment runtime behavior |
+| `database/naming.py`, `database/metadata.py` | Database naming and `aa|` metadata construction |
+| `database/decoy*.py`, `database/entrapment.py` | Decoy and biological-entrapment runtime behavior |
+| `database_compile.py`, `decoy_compile.py` | Passive build/strategy document compilation |
 | `protein_input.py`, `database_build.py` | Source preparation and biological assembly roots |
 | `decoy_database.py`, `decoy_report.py` | Search-database generation and method diagnostics |
 | `peptide/`, `peptide_workflow.py` | Peptide model, executors, artifacts, and comparisons |
@@ -80,13 +81,12 @@ remaining structural edges are explicit:
 
 | Importing child | Current dependency | Directed-folder consequence |
 | --- | --- | --- |
-| `build/` | parent-root `analytics_compile` | upward import remains |
 | `registry/` | parent-root `compile`, `documents`, `record`, and `summary` | upward imports remain |
 | `peptide/` | sibling `analytics/` and sibling `registry/` | more than one direct sibling |
 | `registry/` | sibling `analytics/`, `database/`, `diagnostics/`, `reading/`, and `schema/` | more than one direct sibling |
 
-`build/ -> schema/` and `uniprot/ -> reading/` each use one directed sibling edge and therefore do
-not violate the sibling-count rule. The existing architecture tests additionally keep every
+`uniprot/ -> reading/` uses one directed sibling edge and therefore does not violate the
+sibling-count rule. The existing architecture tests additionally keep every
 initializer empty, name the root modules allowed to compose multiple children, and constrain the
 CLI's imported package components. A future folder migration must move ownership or composition;
 adding forwarding modules solely to hide these edges would not improve the architecture.
@@ -97,11 +97,11 @@ The UniProt and peptide workflows compile passive discriminator documents once a
 runtime objects that own resolution, acquisition, or execution behavior. Those branches are
 storage-boundary factories, not missing methods on the Pydantic documents.
 
-One decoy migration residual remains: `decoy_database` and `decoy_report` independently translate
-the same reverse/shuffle/DecoyPYrat strategy document into the older `DecoyDocument` consumed by
-`make_decoy_generation()`. The runtime `DecoyGeneration` protocol is the correct behavioral
-boundary, but the storage-to-runtime compilation needs one shared composition owner before the
-legacy document can be retired.
+`decoy_compile.py` is the single storage-to-runtime composition owner for reverse, shuffle, and
+DecoyPYrat documents. It constructs the schema-independent `DecoyGeneration` behavior used by
+both database generation and diagnostic comparison. `database_compile.py` performs the equivalent
+one-time compilation for naming, metadata, and biological entrapment documents. The child
+`database/` package therefore has no dependency on Pydantic schemas or workflow roots.
 
 ## Build stages are explicit
 

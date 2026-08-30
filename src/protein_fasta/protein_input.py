@@ -43,6 +43,53 @@ from protein_fasta.validation.sequence import normalize_sequence
 
 
 @dataclass(frozen=True, slots=True)
+class ProteinSourceEntry:
+    """One exact source header and sequence supplied to input preparation."""
+
+    raw_header: str
+    sequence: str
+
+
+@dataclass(frozen=True, slots=True)
+class TargetProteinSource:
+    """One ordered source of biological target proteins."""
+
+    source_id: str
+    entries: tuple[ProteinSourceEntry, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class ContaminantProteinBlock:
+    """One named contaminant block with exact source entries."""
+
+    source_id: str
+    block_name: str
+    block_description: str
+    entries: tuple[ProteinSourceEntry, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class ForeignProteinBlock:
+    """One foreign source available to biological entrapment generation."""
+
+    source_id: str
+    entries: tuple[ProteinSourceEntry, ...]
+
+
+type ProteinInputSource = TargetProteinSource | ContaminantProteinBlock | ForeignProteinBlock
+
+
+@dataclass(frozen=True, slots=True)
+class PreparedProteinInput:
+    """Canonical frame and normalization evidence from in-memory sources."""
+
+    frame: pl.DataFrame
+    source_row_counts: tuple[int, ...]
+    upper_cased: int
+    terminal_stops_stripped: int
+
+
+@dataclass(frozen=True, slots=True)
 class ProteinInputExecution:
     """Canonical frame and durable evidence from one source preparation."""
 
@@ -122,15 +169,12 @@ def run_protein_input_preparation(
         effective.model_dump(mode="json"),
         replace_existing=True,
     )
-    rows: list[dict[str, object]] = []
+    runtime_sources = tuple(_runtime_source(source) for source in effective.sources)
+    prepared = _prepare_protein_sources(runtime_sources)
     source_evidence: list[ProteinInputSourceEvidenceDocument] = []
-    upper_cased = 0
-    stops_stripped = 0
-    for source_order, source in enumerate(effective.sources):
-        source_rows, source_upper, source_stops = _source_rows(source, source_order)
-        rows.extend(source_rows)
-        upper_cased += source_upper
-        stops_stripped += source_stops
+    for source_order, (source, row_count) in enumerate(
+        zip(effective.sources, prepared.source_row_counts, strict=True)
+    ):
         source_evidence.append(
             ProteinInputSourceEvidenceDocument(
                 source_id=source.source_id,
@@ -141,11 +185,11 @@ def run_protein_input_preparation(
                     recorded_path=Path(os.path.relpath(source.path, start=output.parent)),
                     schema_name="protein-fasta-input",
                     schema_version="1",
-                    row_count=len(source_rows),
+                    row_count=row_count,
                 ),
             )
         )
-    frame = pl.DataFrame(rows, schema=PROTEIN_INPUT_SCHEMA)
+    frame = prepared.frame
     with temporary_sibling(output) as staged:
         frame.write_parquet(staged)
         input_artifact = artifact_document(
@@ -161,8 +205,8 @@ def run_protein_input_preparation(
             protein_input=input_artifact,
             sources=tuple(source_evidence),
             normalization=ProteinInputNormalizationDocument(
-                upper_cased=upper_cased,
-                terminal_stops_stripped=stops_stripped,
+                upper_cased=prepared.upper_cased,
+                terminal_stops_stripped=prepared.terminal_stops_stripped,
             ),
         )
         publish_exclusive(staged, output)
@@ -182,6 +226,23 @@ def run_protein_input_preparation(
         output,
     )
     return ProteinInputExecution(frame, document, output, effective_path, result_path)
+
+
+def prepare_protein_input_frame(
+    target_sources: tuple[TargetProteinSource, ...],
+    contaminant_blocks: tuple[ContaminantProteinBlock, ...] = (),
+    foreign_blocks: tuple[ForeignProteinBlock, ...] = (),
+    /,
+) -> PreparedProteinInput:
+    """Prepare canonical rows directly from ordered in-memory protein sources.
+
+    Source groups are emitted in target, contaminant, then foreign order. Callers
+    requiring arbitrary interleaving should use the request/file adapter, which
+    preserves the authored source order while invoking the same computation.
+    """
+    if not target_sources:
+        raise ValueError("protein input requires at least one target source")
+    return _prepare_protein_sources((*target_sources, *contaminant_blocks, *foreign_blocks))
 
 
 def run_derived_protein_input_preparation(
@@ -400,8 +461,46 @@ def _derived_source_evidence(
     )
 
 
+def _prepare_protein_sources(
+    sources: tuple[ProteinInputSource, ...],
+) -> PreparedProteinInput:
+    rows: list[dict[str, object]] = []
+    row_counts: list[int] = []
+    upper_cased = 0
+    stops_stripped = 0
+    for source_order, source in enumerate(sources):
+        source_rows, source_upper, source_stops = _source_rows(source, source_order)
+        rows.extend(source_rows)
+        row_counts.append(len(source_rows))
+        upper_cased += source_upper
+        stops_stripped += source_stops
+    return PreparedProteinInput(
+        pl.DataFrame(rows, schema=PROTEIN_INPUT_SCHEMA),
+        tuple(row_counts),
+        upper_cased,
+        stops_stripped,
+    )
+
+
+def _runtime_source(source: ProteinSourceDocument) -> ProteinInputSource:
+    entries = tuple(
+        ProteinSourceEntry(record.raw_header, record.sequence)
+        for record in read_records(source.path)
+    )
+    if isinstance(source, ContaminantProteinSourceDocument):
+        return ContaminantProteinBlock(
+            source.source_id,
+            source.block_name,
+            source.block_description,
+            entries,
+        )
+    if source.type == "foreign":
+        return ForeignProteinBlock(source.source_id, entries)
+    return TargetProteinSource(source.source_id, entries)
+
+
 def _source_rows(
-    source: ProteinSourceDocument,
+    source: ProteinInputSource,
     source_order: int,
 ) -> tuple[list[dict[str, object]], int, int]:
     rows: list[dict[str, object]] = []
@@ -409,14 +508,20 @@ def _source_rows(
     stops_stripped = 0
     block_name: str | None = None
     block_description: str | None = None
-    if isinstance(source, ContaminantProteinSourceDocument):
+    role: Literal["target", "contaminant", "foreign"] = "target"
+    if isinstance(source, ContaminantProteinBlock):
+        role = "contaminant"
         block_name = source.block_name
         block_description = source.block_description
-    for record_order, record in enumerate(read_records(source.path)):
-        normalized = normalize_sequence(record.sequence)
+    elif isinstance(source, ForeignProteinBlock):
+        role = "foreign"
+    for record_order, entry in enumerate(source.entries):
+        normalized = normalize_sequence(entry.sequence)
         if not normalized.sequence:
-            raise ValueError(f"{source.path}: entry {record.raw_header!r} has no sequence")
-        header = parse_header(record.raw_header)
+            raise ValueError(
+                f"source {source.source_id!r}: entry {entry.raw_header!r} has no sequence"
+            )
+        header = parse_header(entry.raw_header)
         upper_cased += int(normalized.upper_cased)
         stops_stripped += int(normalized.stop_stripped)
         rows.append(
@@ -424,10 +529,10 @@ def _source_rows(
                 "source_order": source_order,
                 "record_order": record_order,
                 "source_id": source.source_id,
-                "role": source.type,
+                "role": role,
                 "block_name": block_name,
                 "block_description": block_description,
-                "raw_header": record.raw_header,
+                "raw_header": entry.raw_header,
                 "id": header.id,
                 "description": header.description,
                 "sequence": normalized.sequence,

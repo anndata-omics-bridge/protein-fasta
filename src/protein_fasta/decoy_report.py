@@ -23,19 +23,14 @@ from protein_fasta.artifact_io import (
     temporary_sibling,
     write_json_atomic,
 )
-from protein_fasta.build.generation.decoy import make_decoy_generation
+from protein_fasta.decoy_compile import make_decoy_generation
 from protein_fasta.diagnostics.runtime import DiagnosticRules
 from protein_fasta.inventory import protein_inventory_entries, read_protein_inventory
 from protein_fasta.record import iter_protein_diagnostics
 from protein_fasta.registry.classification import ContaminantBlockState, classify_record
 from protein_fasta.registry.kinds import EntryKind
 from protein_fasta.schema.analytics import DigestionDocument
-from protein_fasta.schema.build import DecoyDocument, DecoyMode
-from protein_fasta.schema.decoy import (
-    DecoyStrategyDocument,
-    ReverseDecoyDocument,
-    ShuffleDecoyDocument,
-)
+from protein_fasta.schema.decoy import DecoyStrategyDocument
 from protein_fasta.schema.decoy_report import (
     DecoyReportRequestDocument,
     DecoyReportResultDocument,
@@ -177,7 +172,7 @@ def compare_decoy_methods(
     target, target_peptides = peptide_population((sequence for _, sequence in sources), digestion)
     methods: list[DecoyMethodStats] = []
     for strategy in strategies:
-        generation = make_decoy_generation(_generation_document(strategy))
+        generation = make_decoy_generation(strategy)
         batch = generation.generate(sources, prefix=prefix)
         methods.append(
             compare_decoy_population(
@@ -268,18 +263,6 @@ def _method_row(method: DecoyMethodStats) -> dict[str, object]:
         "dropped_peptides": method.dropped_peptides,
         "omitted_decoys": method.omitted_decoys,
     }
-
-
-def _generation_document(strategy: DecoyStrategyDocument) -> DecoyDocument:
-    if isinstance(strategy, ReverseDecoyDocument):
-        return DecoyDocument(mode=DecoyMode.REVERSE)
-    if isinstance(strategy, ShuffleDecoyDocument):
-        return DecoyDocument(mode=DecoyMode.SHUFFLE, seed=strategy.seed)
-    return DecoyDocument(
-        mode=DecoyMode.DECOYPYRAT,
-        seed=strategy.seed,
-        digestion=strategy.digestion,
-    )
 
 
 def _refuse_existing(*paths: Path) -> None:

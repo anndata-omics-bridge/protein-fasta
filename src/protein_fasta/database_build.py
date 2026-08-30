@@ -29,19 +29,24 @@ import tempfile
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, replace
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, cast
 
 from loguru import logger
 
 from protein_fasta.analytics.hashing import FILE_CHECKSUM_VERSION, file_checksum, sequence_hash
 from protein_fasta.artifact_io import publish_exclusive, temporary_sibling, write_json_atomic
-from protein_fasta.build.metadata import build_section_marker_header, build_sentinel_header
-from protein_fasta.build.naming import build_dbname, build_fasta_name
+from protein_fasta.database.metadata import (
+    DatabaseMetadata,
+    build_section_marker_header,
+    build_sentinel_header,
+)
 from protein_fasta.database.models import (
     BiologicalDatabase,
     ProteinInventoryEntry,
     SourceRole,
 )
+from protein_fasta.database.naming import DatabaseNaming, build_dbname, build_fasta_name
+from protein_fasta.database_compile import make_database_metadata, make_database_naming
 from protein_fasta.diagnostics.messages import describe_illegal_residues
 from protein_fasta.diagnostics.runtime import DiagnosticRules
 from protein_fasta.reading.header import parse_header
@@ -61,11 +66,6 @@ from protein_fasta.schema.build import (
     DatabaseBuildResultDocument,
     DatabaseBuildSummaryDocument,
     EffectiveDatabaseBuildDocument,
-    EntrapmentDocument,
-    EntrapmentStrategy,
-    ForeignSpeciesEntrapmentDocument,
-    MetadataDocument,
-    NamingDocument,
 )
 from protein_fasta.summary import FastaSummary, summarize_sequences
 from protein_fasta.validation.sequence import normalize_sequence
@@ -73,7 +73,7 @@ from protein_fasta.validation.sequence import normalize_sequence
 if TYPE_CHECKING:
     import polars as pl
 
-    from protein_fasta.build.generation.entrapment_types import (
+    from protein_fasta.database.entrapment import (
         EntrapmentBatch,
         EntrapmentGeneration,
     )
@@ -85,16 +85,12 @@ Entry = tuple[str, str]
 _REPORTED_CONFLICTS = 5
 
 
-def _make_entrapment_generation(spec: EntrapmentDocument) -> EntrapmentGeneration:
+def _make_entrapment_generation(
+    spec: BiologicalEntrapmentDocument,
+) -> EntrapmentGeneration:
     """Load the optional entrapment adapter only when a build selects it."""
-    try:
-        from protein_fasta.build.generation.entrapment import make_entrapment_generation
-    except ModuleNotFoundError as error:
-        missing_name = error.name or ""
-        if missing_name == "fdr_benchmark" or missing_name.startswith("fdr_benchmark."):
-            message = "entrapment generation requires the 'protein-fasta[generation]' extra"
-            raise RuntimeError(message) from error
-        raise
+    from protein_fasta.database_compile import make_entrapment_generation
+
     return make_entrapment_generation(spec)
 
 
@@ -117,20 +113,7 @@ class ProteinSourceProvenance:
     source_role: SourceRole
 
 
-@dataclass(frozen=True)
-class DecoyBuildEvidence:
-    """Decoy algorithm identity, parameters, and collision outcomes."""
-
-    mode: str
-    seed: int | None
-    parameters: dict[str, Any]
-    initial_collisions: int
-    unresolved_collisions: int
-    dropped_peptides: int
-    omitted_decoys: int
-
-
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class EntrapmentBuildEvidence:
     """Entrapment algorithm identity and achieved multiplicity."""
 
@@ -143,20 +126,19 @@ class EntrapmentBuildEvidence:
     source_proteins: int
 
 
-@dataclass(frozen=True)
-class PipelineResult:
-    """Outcome of a database build."""
+@dataclass(frozen=True, slots=True)
+class BiologicalBuildResult:
+    """Runtime outcome of one decoy-free biological database build."""
 
     path: Path
     dbname: str
     n_target: int
     n_contaminant: int
-    n_decoy: int
+    n_entrapment: int
     n_total: int
-    contaminant_sets: list[str]
+    contaminant_sets: tuple[str, ...]
     summary: FastaSummary
-    decoy: DecoyBuildEvidence | None = None
-    n_entrapment: int = 0
+    database: BiologicalDatabase
     entrapment: EntrapmentBuildEvidence | None = None
     entrapment_pairs_path: Path | None = None
     # What normalization and deduplication changed on the way in, so a produced
@@ -164,7 +146,6 @@ class PipelineResult:
     upper_cased_entries: int = 0
     stop_stripped_entries: int = 0
     duplicates_dropped: int = 0
-    database: BiologicalDatabase | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -181,7 +162,7 @@ DEFAULT_BUILD_OVERRIDES = DatabaseBuildOverrides()
 class DatabaseBuildExecution:
     """Runtime result and its durable JSON evidence paths."""
 
-    result: PipelineResult
+    result: BiologicalBuildResult
     database: BiologicalDatabase
     document: DatabaseBuildResultDocument
     protein_input_path: Path
@@ -246,8 +227,10 @@ def run_database_build(
 ) -> DatabaseBuildExecution:
     """Read one effective request, build its FASTA, and persist typed evidence."""
     effective.output_dir.mkdir(parents=True, exist_ok=True)
+    naming = make_database_naming(effective.naming)
+    metadata = make_database_metadata(effective.metadata)
     expected_name = build_fasta_name(
-        config=effective.naming,
+        config=naming,
         template=effective.template,
         date=effective.date,
         decoy=False,
@@ -285,21 +268,23 @@ def run_database_build(
         staged_result = build_database(
             targets=target_entries,
             name_fields=effective.name_fields,
-            naming=effective.naming,
-            metadata=effective.metadata,
+            naming=naming,
+            metadata=metadata,
             diagnostics=diagnostics,
             output_dir=staging_dir,
             date=effective.date,
             template=effective.template,
             contaminant_blocks=blocks,
-            entrapment_spec=_legacy_entrapment_spec(effective.entrapment),
+            entrapment_generation=(
+                None
+                if effective.entrapment is None
+                else _make_entrapment_generation(effective.entrapment)
+            ),
             foreign_entries=foreign_entries,
             annotation=effective.annotation,
             installer=effective.installer,
             source_provenance=source_provenance,
         )
-        if staged_result.database is None:
-            raise AssertionError("biological assembly did not return its canonical database")
         database = staged_result.database
         staged_inventory = staging_dir / inventory_path.name
         inventory_rows = write_protein_inventory(staged_result, staged_inventory)
@@ -358,7 +343,7 @@ def run_database_build_from_frame(
 
     validate_protein_input_frame(frame)
     expected_name = build_fasta_name(
-        config=effective.naming,
+        config=make_database_naming(effective.naming),
         template=effective.template,
         date=effective.date,
         decoy=False,
@@ -382,14 +367,12 @@ def run_database_build_from_frame(
 
 
 def write_protein_inventory(
-    result: PipelineResult,
+    result: BiologicalBuildResult,
     path: Path,
 ) -> int:
     """Write the exact canonical tuple used for one biological FASTA."""
     from protein_fasta.inventory import biological_database_frame
 
-    if result.database is None:
-        raise ValueError("pipeline result has no canonical biological database")
     with temporary_sibling(path) as staged:
         biological_database_frame(result.database).write_parquet(staged)
         publish_exclusive(staged, path)
@@ -480,32 +463,6 @@ def _sources_from_protein_input(
     return targets, blocks, foreign, provenance
 
 
-def _legacy_entrapment_spec(
-    spec: BiologicalEntrapmentDocument | None,
-) -> EntrapmentDocument | None:
-    """Compile strategy-specific biological storage into the current runtime request."""
-    if spec is None:
-        return None
-    if isinstance(spec, ForeignSpeciesEntrapmentDocument):
-        return EntrapmentDocument(
-            strategy=EntrapmentStrategy.FOREIGN_SPECIES,
-            fold=spec.fold,
-            seed=spec.seed,
-            digestion=spec.digestion,
-            normalize_i_to_l=spec.normalize_i_to_l,
-            reject_shared_foreign=spec.reject_shared_foreign,
-        )
-    return EntrapmentDocument(
-        strategy=EntrapmentStrategy.SHUFFLED,
-        fold=spec.fold,
-        seed=spec.seed,
-        digestion=spec.digestion,
-        fix_peptide_n_term=spec.fix_peptide_n_term,
-        fix_peptide_c_term=spec.fix_peptide_c_term,
-        normalize_i_to_l=spec.normalize_i_to_l,
-    )
-
-
 def _artifact(
     path: Path,
     *,
@@ -528,7 +485,7 @@ def _artifact(
 
 def _result_document(
     effective: EffectiveDatabaseBuildDocument,
-    result: PipelineResult,
+    result: BiologicalBuildResult,
     effective_path: Path,
     input_path: Path,
     inventory_path: Path,
@@ -717,20 +674,20 @@ def _deduplicate_by_id(
 def build_database(
     *,
     targets: Iterable[Entry],
-    name_fields: dict[str, Any],
-    naming: NamingDocument,
-    metadata: MetadataDocument,
+    name_fields: Mapping[str, object],
+    naming: DatabaseNaming,
+    metadata: DatabaseMetadata,
     diagnostics: RegistryDiagnosticRules,
     output_dir: Path,
     date: datetime.date,
     template: str | None = None,
     contaminant_blocks: Iterable[ContaminantBlock] = (),
-    entrapment_spec: EntrapmentDocument | None = None,
+    entrapment_generation: EntrapmentGeneration | None = None,
     foreign_entries: Iterable[Entry] = (),
     annotation: str = "",
     installer: str | None = None,
     source_provenance: Mapping[str, ProteinSourceProvenance] | None = None,
-) -> PipelineResult:
+) -> BiologicalBuildResult:
     """Build a decoy-free biological FASTA from resolved sources and policy.
 
     ``name_fields`` are substituted into the chosen naming ``template`` (e.g.
@@ -738,19 +695,16 @@ def build_database(
     consumed once; pass a list if you need to reuse it.
     """
     resolved_blocks = list(contaminant_blocks)
-    entrapment_generation: EntrapmentGeneration | None = (
-        None if entrapment_spec is None else _make_entrapment_generation(entrapment_spec)
-    )
     sentinel_cfg = metadata
     if installer is not None:
-        sentinel_cfg = sentinel_cfg.model_copy(update={"installer": installer})
+        sentinel_cfg = replace(sentinel_cfg, installer=installer)
 
     filename = build_fasta_name(
         config=naming,
         template=template,
         date=date,
         decoy=False,
-        entrapment=entrapment_spec is not None,
+        entrapment=entrapment_generation is not None,
         **name_fields,
     )
     # Sentinel/database identity is the name without the date or decoy marker,
@@ -839,7 +793,6 @@ def build_database(
     n_target = sum(entry.kind == EntryKind.TARGET.value for entry in database.entries)
     n_contaminant = sum(entry.kind == EntryKind.CONTAMINANT.value for entry in database.entries)
     n_entrapment = sum(entry.kind == EntryKind.ENTRAPMENT.value for entry in database.entries)
-    n_decoy = 0
     out_path = output_dir / filename
     with temporary_sibling(out_path) as staged_fasta:
         write_records(
@@ -880,32 +833,29 @@ def build_database(
 
     summary = summarize_sequences(_scientific_sequences(final, diagnostics))
     logger.info(
-        "built {}: {} target + {} contaminant + {} entrapment + {} decoy = {} entries",
+        "built {}: {} target + {} contaminant + {} entrapment = {} entries",
         out_path.name,
         n_target,
         n_contaminant,
         n_entrapment,
-        n_decoy,
         len(final),
     )
     entrapment_evidence = _entrapment_build_evidence(entrapment_generation, entrapment_batch)
-    return PipelineResult(
+    return BiologicalBuildResult(
         path=out_path,
         dbname=dbname,
         n_target=n_target,
         n_contaminant=n_contaminant,
-        n_decoy=n_decoy,
-        n_total=len(final),
-        contaminant_sets=[block.name for block in resolved_blocks],
-        summary=summary,
-        decoy=None,
         n_entrapment=n_entrapment,
+        n_total=len(final),
+        contaminant_sets=tuple(block.name for block in resolved_blocks),
+        summary=summary,
+        database=database,
         entrapment=entrapment_evidence,
         entrapment_pairs_path=pairs_path,
         upper_cased_entries=upper_cased,
         stop_stripped_entries=stop_stripped,
         duplicates_dropped=duplicates_dropped,
-        database=database,
     )
 
 

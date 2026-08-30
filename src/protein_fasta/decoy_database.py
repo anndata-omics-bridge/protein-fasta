@@ -18,12 +18,12 @@ from protein_fasta.artifact_io import (
     temporary_sibling,
     write_json_atomic,
 )
-from protein_fasta.build.generation.decoy import make_decoy_generation
 from protein_fasta.database.models import (
     DecoyInventoryEntry,
     ProteinInventoryEntry,
     SearchDatabase,
 )
+from protein_fasta.decoy_compile import make_decoy_generation
 from protein_fasta.inventory import (
     protein_inventory_entries,
     read_protein_inventory,
@@ -32,7 +32,6 @@ from protein_fasta.inventory import (
 from protein_fasta.reading.parser import FastaRecord
 from protein_fasta.reading.writer import write_records
 from protein_fasta.registry.kinds import EntryKind
-from protein_fasta.schema.build import DecoyDocument, DecoyMode
 from protein_fasta.schema.decoy import (
     DecoyCountsDocument,
     DecoyGenerationEvidenceDocument,
@@ -40,8 +39,6 @@ from protein_fasta.schema.decoy import (
     DecoyResultDocument,
     DecoySummaryDocument,
     EffectiveDecoyRequestDocument,
-    ReverseDecoyDocument,
-    ShuffleDecoyDocument,
 )
 from protein_fasta.summary import FastaSummary, summarize_sequences
 
@@ -111,7 +108,7 @@ def run_decoy_generation(
     output.parent.mkdir(parents=True, exist_ok=True)
     write_json_atomic(effective_path, effective.model_dump(mode="json"), replace_existing=True)
 
-    generation = make_decoy_generation(_legacy_spec(effective))
+    generation = make_decoy_generation(effective.strategy)
     source_entries_runtime = [
         entry for entry in biological_entries if entry.kind in _DECOY_SOURCE_KINDS
     ]
@@ -191,7 +188,7 @@ def run_decoy_generation(
                 generation=DecoyGenerationEvidenceDocument(
                     strategy=generation.mode.value,
                     seed=generation.seed,
-                    parameters=cast(dict[str, object], batch.parameters),
+                    parameters=batch.parameters,
                     initial_collisions=batch.initial_collisions,
                     unresolved_collisions=batch.unresolved_collisions,
                     dropped_peptides=batch.dropped_peptides,
@@ -218,19 +215,6 @@ def run_decoy_generation(
         search_inventory_path,
         effective_path,
         result_path,
-    )
-
-
-def _legacy_spec(effective: EffectiveDecoyRequestDocument) -> DecoyDocument:
-    strategy = effective.strategy
-    if isinstance(strategy, ReverseDecoyDocument):
-        return DecoyDocument(mode=DecoyMode.REVERSE)
-    if isinstance(strategy, ShuffleDecoyDocument):
-        return DecoyDocument(mode=DecoyMode.SHUFFLE, seed=strategy.seed)
-    return DecoyDocument(
-        mode=DecoyMode.DECOYPYRAT,
-        seed=strategy.seed,
-        digestion=strategy.digestion,
     )
 
 

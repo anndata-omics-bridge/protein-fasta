@@ -1,10 +1,10 @@
-"""Adapters from advanced protein-decoy modes to ``fdr_benchmark``."""
+"""Optional ``fdr_benchmark`` implementations of advanced decoy generation."""
 
 from __future__ import annotations
 
 import importlib.metadata
 from dataclasses import asdict, dataclass, replace
-from typing import Any
+from typing import cast
 
 from fdr_benchmark.decoypyrat import generate_decoypyrat
 from fdr_benchmark.models import (
@@ -16,13 +16,7 @@ from fdr_benchmark.models import (
 )
 from fdr_benchmark.protein_shuffle import generate_shuffled_decoys
 
-from protein_fasta.analytics_compile import make_digestion
-from protein_fasta.build.generation.decoy_types import (
-    DecoyBatch,
-    DecoyGeneration,
-    Entry,
-)
-from protein_fasta.schema.build import DecoyDocument, DecoyMode
+from protein_fasta.database.decoy import DecoyBatch, DecoyMode, Entry
 
 
 @dataclass(frozen=True, slots=True)
@@ -34,7 +28,7 @@ class ShuffleDecoyGeneration:
 
     @property
     def mode(self) -> DecoyMode:
-        """Return the shuffle algorithm label."""
+        """Return the shuffle algorithm identity."""
         return DecoyMode.SHUFFLE
 
     @property
@@ -53,7 +47,7 @@ class ShuffleDecoyGeneration:
         )
         return _batch_from_result(entries, records, result, prefix, self.parameters())
 
-    def parameters(self) -> dict[str, Any]:
+    def parameters(self) -> dict[str, object]:
         """Return shuffle-generation provenance."""
         return {
             "mode": self.mode.value,
@@ -85,7 +79,7 @@ class DecoyPyratGeneration:
 
     @property
     def mode(self) -> DecoyMode:
-        """Return the DecoyPYrat algorithm label."""
+        """Return the DecoyPYrat algorithm identity."""
         return DecoyMode.DECOYPYRAT
 
     @property
@@ -101,14 +95,14 @@ class DecoyPyratGeneration:
         result = generate_decoypyrat(records, replace(self._request, prefix=prefix))
         return _batch_from_result(entries, records, result, prefix, self.parameters())
 
-    def parameters(self) -> dict[str, Any]:
+    def parameters(self) -> dict[str, object]:
         """Return DecoyPYrat generation and digestion provenance."""
         return {
             "mode": self.mode.value,
             "seed": self._request.seed,
             "implementation": "fdr_benchmark",
             "implementation_version": self._implementation_version,
-            "digestion": asdict(self._request.digestion),
+            "digestion": cast("dict[str, object]", asdict(self._request.digestion)),
             "max_attempts": self._request.max_attempts,
             "switch_cleavage_sites": self._request.switch_cleavage_sites,
         }
@@ -135,25 +129,30 @@ class DecoyPyratGeneration:
         return f"{note})"
 
 
-def make_fdr_decoy_generation(spec: DecoyDocument) -> DecoyGeneration:
-    """Compile one advanced decoy document through ``fdr_benchmark``."""
-    implementation_version = importlib.metadata.version("fdr_benchmark")
-    if spec.mode == DecoyMode.SHUFFLE:
-        return ShuffleDecoyGeneration(spec.seed, implementation_version)
-    if spec.mode == DecoyMode.DECOYPYRAT:
-        digestion = make_digestion(spec.digestion)
-        request = DecoyPyratRequest(
-            digestion=DigestionSpec(
-                enzyme=digestion.cleavage.pattern,
-                missed_cleavages=0,
-                min_length=spec.digestion.min_length,
-                max_length=spec.digestion.max_length,
-            ),
-            prefix="unused",
-            seed=spec.seed,
-        )
-        return DecoyPyratGeneration(request, implementation_version)
-    raise ValueError(f"unsupported advanced decoy mode: {spec.mode!r}")
+def make_shuffle_decoy_generation(seed: int, /) -> ShuffleDecoyGeneration:
+    """Construct one seeded shuffle implementation."""
+    return ShuffleDecoyGeneration(seed, importlib.metadata.version("fdr_benchmark"))
+
+
+def make_decoypyrat_generation(
+    *,
+    seed: int,
+    enzyme: str,
+    minimum_length: int,
+    maximum_length: int,
+) -> DecoyPyratGeneration:
+    """Construct one digestion-aware DecoyPYrat implementation."""
+    request = DecoyPyratRequest(
+        digestion=DigestionSpec(
+            enzyme=enzyme,
+            missed_cleavages=0,
+            min_length=minimum_length,
+            max_length=maximum_length,
+        ),
+        prefix="unused",
+        seed=seed,
+    )
+    return DecoyPyratGeneration(request, importlib.metadata.version("fdr_benchmark"))
 
 
 def _batch_from_result(
@@ -161,11 +160,8 @@ def _batch_from_result(
     records: tuple[FastaRecord, ...],
     result: DecoyGenerationResult,
     prefix: str,
-    parameters: dict[str, Any],
+    parameters: dict[str, object],
 ) -> DecoyBatch:
-    # A protein whose every peptide collides with the target set and admits no
-    # replacement yields no decoy, so pair by source identifier rather than by
-    # position.
     sequences = {pair.source_id: pair.generated_sequence for pair in result.pairs}
     generated = tuple(
         (f"{prefix}{description}", sequences[record.identifier])

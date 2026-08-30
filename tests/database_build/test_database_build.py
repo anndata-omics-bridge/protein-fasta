@@ -9,14 +9,20 @@ import polars as pl
 import pytest
 
 import protein_fasta.database_build as database_build
+from protein_fasta.database.entrapment import EntrapmentStrategy
 from protein_fasta.database_build import (
+    BiologicalBuildResult,
     ConflictingIdError,
     ContaminantBlock,
     Entry,
-    PipelineResult,
     build_database,
     run_database_build,
     run_database_build_from_frame,
+)
+from protein_fasta.database_compile import (
+    make_database_metadata,
+    make_database_naming,
+    make_entrapment_generation,
 )
 from protein_fasta.inventory import (
     PROTEIN_INPUT_SCHEMA,
@@ -28,10 +34,10 @@ from protein_fasta.reading.parser import read_records
 from protein_fasta.registry.rules import load_registry_diagnostics
 from protein_fasta.schema.build import (
     EffectiveDatabaseBuildDocument,
-    EntrapmentDocument,
-    EntrapmentStrategy,
+    ForeignSpeciesEntrapmentDocument,
     MetadataDocument,
     NamingDocument,
+    ShuffledEntrapmentDocument,
 )
 
 
@@ -40,12 +46,12 @@ def _build(
     *,
     targets: tuple[Entry, ...] = (("sp|P1|ONE Protein one", "ak*"),),
     contaminant_blocks: tuple[ContaminantBlock, ...] = (),
-) -> PipelineResult:
+) -> BiologicalBuildResult:
     return build_database(
         targets=targets,
         name_fields={"description": "demo"},
-        naming=NamingDocument(default_dbname="derived"),
-        metadata=MetadataDocument(),
+        naming=make_database_naming(NamingDocument(default_dbname="derived")),
+        metadata=make_database_metadata(MetadataDocument()),
         diagnostics=load_registry_diagnostics(),
         output_dir=tmp_path,
         date=datetime.date(2026, 8, 27),
@@ -249,13 +255,15 @@ def test_entrapment_joins_the_biological_database_without_decoys(tmp_path: Path)
             ("sp|P2|TWO second", "MSAMPLERGGGYTFDKQVNTLPWR"),
         ),
         name_fields={"description": "entrapment"},
-        naming=NamingDocument(default_dbname="derived"),
-        metadata=MetadataDocument(),
+        naming=make_database_naming(NamingDocument(default_dbname="derived")),
+        metadata=make_database_metadata(MetadataDocument()),
         diagnostics=diagnostics,
         output_dir=tmp_path,
         date=datetime.date(2026, 8, 27),
         template="derived",
-        entrapment_spec=EntrapmentDocument(fold=1, seed=7),
+        entrapment_generation=make_entrapment_generation(
+            ShuffledEntrapmentDocument(fold=1, seed=7)
+        ),
     )
 
     identifiers = [parse_header(record.raw_header).id for record in read_records(result.path)]
@@ -266,7 +274,6 @@ def test_entrapment_joins_the_biological_database_without_decoys(tmp_path: Path)
     }
 
     assert result.n_entrapment == 2
-    assert result.n_decoy == 0
     assert len(entrapment_ids) == result.n_entrapment
     assert not {f"REV_{identifier}" for identifier in entrapment_ids} & set(identifiers)
     assert result.entrapment_pairs_path is not None
@@ -282,16 +289,13 @@ def test_foreign_species_entrapment_does_not_claim_peptide_pairs(tmp_path: Path)
     result = build_database(
         targets=(("sp|P1|ONE first", "MPEPTIDEKTESTSEQUENCEK"),),
         name_fields={"description": "foreign"},
-        naming=NamingDocument(default_dbname="derived"),
-        metadata=MetadataDocument(),
+        naming=make_database_naming(NamingDocument(default_dbname="derived")),
+        metadata=make_database_metadata(MetadataDocument()),
         diagnostics=load_registry_diagnostics(),
         output_dir=tmp_path,
         date=datetime.date(2026, 8, 27),
         template="derived",
-        entrapment_spec=EntrapmentDocument(
-            strategy=EntrapmentStrategy.FOREIGN_SPECIES,
-            fold=1,
-        ),
+        entrapment_generation=make_entrapment_generation(ForeignSpeciesEntrapmentDocument(fold=1)),
         foreign_entries=(
             ("sp|F1|FOREIGN_ONE foreign", "MKWVTFISLLFLFSSAYSR"),
             ("sp|F2|FOREIGN_TWO foreign", "AGGDDKYTFDKQVNTLPWR"),

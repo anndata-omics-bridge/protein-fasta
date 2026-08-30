@@ -4,11 +4,13 @@ import datetime
 
 import pytest
 
-from protein_fasta.build.naming import build_dbname, build_description, build_fasta_name
+from protein_fasta.database.naming import build_dbname, build_description, build_fasta_name
+from protein_fasta.database_compile import make_database_naming
 from protein_fasta.registry.filenames import parse_filename
 from protein_fasta.schema.build import NamingDocument
 
-CFG = NamingDocument()
+CFG_DOCUMENT = NamingDocument()
+CFG = make_database_naming(CFG_DOCUMENT)
 
 
 def test_build_basic() -> None:
@@ -90,7 +92,7 @@ def test_unknown_template_raises() -> None:
 def test_parse_filename(
     filename: str, dbname: str, decoy: bool, date: datetime.date | None
 ) -> None:
-    parsed = parse_filename(filename, CFG)
+    parsed = parse_filename(filename, CFG_DOCUMENT)
     assert parsed.dbname == dbname
     assert parsed.is_decoy is decoy
     assert parsed.date == date
@@ -98,13 +100,14 @@ def test_parse_filename(
 
 def test_filename_patterns_are_config_driven() -> None:
     # Editing the filename pattern in config changes the output with no code change.
-    cfg = NamingDocument(
+    cfg_document = NamingDocument(
         filename={
             **CFG.filename,
             "decoy": "{dbname}.decoy.{date}.{extension}",
             "nondecoy": "{dbname}.{date}.{extension}",
         }
     )
+    cfg = make_database_naming(cfg_document)
     name = build_fasta_name(
         config=cfg,
         template="project",
@@ -143,7 +146,7 @@ def test_build_parse_roundtrip() -> None:
         date=date,
         decoy=True,
     )
-    parsed = parse_filename(name, CFG)
+    parsed = parse_filename(name, CFG_DOCUMENT)
     assert parsed.dbname == "p999_db2_human_reviewed"
     assert parsed.is_decoy is True
     assert parsed.date == date
@@ -151,12 +154,13 @@ def test_build_parse_roundtrip() -> None:
 
 def test_build_parse_roundtrip_honours_configured_extension() -> None:
     # parse_filename must strip the configured extension, not just the legacy set.
-    cfg = NamingDocument(extension="pep")
+    cfg_document = NamingDocument(extension="pep")
+    cfg = make_database_naming(cfg_document)
     date = datetime.date(2026, 1, 2)
     name = build_fasta_name(
         config=cfg, template="project", project=1, dbn=1, description="x", date=date, decoy=False
     )
     assert name == "p1_db1_x_20260102.pep"
-    parsed = parse_filename(name, cfg)
+    parsed = parse_filename(name, cfg_document)
     assert parsed.dbname == "p1_db1_x"
     assert parsed.date == date

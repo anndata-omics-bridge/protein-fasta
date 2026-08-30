@@ -51,7 +51,7 @@ build:  ## Build, validate, and smoke-test source and wheel distributions
 		python -c 'import importlib.util; import protein_fasta.database_build; import protein_fasta.record; assert importlib.util.find_spec("polars") is None'
 	@output="$$(uv run --isolated --no-project --no-cache \
 		--with "$$(printf '%s\n' dist/*.whl)" \
-		python -c 'from protein_fasta.build.generation.decoy import make_decoy_generation; from protein_fasta.schema.build import DecoyDocument, DecoyMode; make_decoy_generation(DecoyDocument(mode=DecoyMode.SHUFFLE))' 2>&1)"; \
+		python -c 'from protein_fasta.decoy_compile import make_decoy_generation; from protein_fasta.schema.decoy import ShuffleDecoyDocument; make_decoy_generation(ShuffleDecoyDocument(seed=7))' 2>&1)"; \
 		status=$$?; \
 		test $$status -ne 0; \
 		printf '%s\n' "$$output" | grep -Fq "protein-fasta[generation]"

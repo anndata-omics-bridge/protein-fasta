@@ -23,6 +23,10 @@ from protein_fasta.inventory import (
     search_database_frame,
 )
 from protein_fasta.protein_input import (
+    ContaminantProteinBlock,
+    ProteinSourceEntry,
+    TargetProteinSource,
+    prepare_protein_input_frame,
     resolve_derived_protein_input_request,
     resolve_protein_input_request,
     run_derived_protein_input_preparation,
@@ -101,6 +105,41 @@ def test_prepare_preserves_order_roles_normalization_and_exact_evidence(tmp_path
     assert [source.artifact.row_count for source in execution.document.sources] == [2, 1]
     assert execution.effective_request_path.is_file()
     assert execution.result_path.is_file()
+
+
+def test_in_memory_preparation_matches_the_file_adapter(tmp_path: Path) -> None:
+    _write_sources(tmp_path)
+    file_execution = run_protein_input_preparation(
+        resolve_protein_input_request(
+            _request(Path("protein-input.parquet")),
+            request_base=tmp_path,
+        )
+    )
+
+    prepared = prepare_protein_input_frame(
+        (
+            TargetProteinSource(
+                "human",
+                (
+                    ProteinSourceEntry("sp|P1|ONE target one", "ak*"),
+                    ProteinSourceEntry("sp|P2|TWO target two", "PEPTIDE"),
+                ),
+            ),
+        ),
+        (
+            ContaminantProteinBlock(
+                "routine",
+                "routine",
+                "routine contaminants",
+                (ProteinSourceEntry("sp|Cont_C1|C1 contaminant", "SAMPLEK"),),
+            ),
+        ),
+    )
+
+    assert prepared.frame.equals(file_execution.frame)
+    assert prepared.source_row_counts == (2, 1)
+    assert prepared.upper_cased == 1
+    assert prepared.terminal_stops_stripped == 1
 
 
 def test_failed_prepare_keeps_effective_request_without_success_artifacts(tmp_path: Path) -> None:

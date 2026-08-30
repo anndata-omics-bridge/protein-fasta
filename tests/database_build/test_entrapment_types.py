@@ -1,4 +1,4 @@
-from protein_fasta.build.generation.entrapment_types import (
+from protein_fasta.database.entrapment import (
     EntrapmentBatch,
     EntrapmentPeptidePair,
     format_entrapment_peptide_pairs,

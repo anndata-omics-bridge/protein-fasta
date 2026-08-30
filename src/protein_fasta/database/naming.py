@@ -10,8 +10,29 @@ from __future__ import annotations
 import datetime
 import re
 from collections.abc import Iterable
+from dataclasses import dataclass
 
-from protein_fasta.schema.build import NamingDocument
+
+@dataclass(frozen=True, slots=True)
+class DescriptionRules:
+    """Runtime flags used to derive compact database descriptions."""
+
+    mode_flags: dict[str, str]
+
+
+@dataclass(frozen=True, slots=True)
+class DatabaseNaming:
+    """Resolved runtime grammar for database and FASTA names."""
+
+    default_dbname: str
+    dbname: dict[str, str]
+    filename: dict[str, str]
+    description: DescriptionRules
+    decoy_token: str
+    entrapment_token: str
+    separator: str
+    date_format: str
+    extension: str
 
 
 class _BlankDefault(dict[str, object]):
@@ -21,7 +42,7 @@ class _BlankDefault(dict[str, object]):
         return ""
 
 
-def build_dbname(*, config: NamingDocument, template: str | None = None, **fields: object) -> str:
+def build_dbname(*, config: DatabaseNaming, template: str | None = None, **fields: object) -> str:
     """Render the ``{dbname}`` (no date/decoy) from a named ``naming.dbname`` pattern.
 
     ``fields`` are substituted into the pattern (e.g. ``project``, ``dbn``,
@@ -43,7 +64,7 @@ def build_dbname(*, config: NamingDocument, template: str | None = None, **field
 
 def build_fasta_name(
     *,
-    config: NamingDocument,
+    config: DatabaseNaming,
     template: str | None = None,
     date: datetime.date,
     decoy: bool,
@@ -76,7 +97,7 @@ def build_fasta_name(
     )
 
 
-def build_description(*, config: NamingDocument, taxids: Iterable[object], mode: str) -> str:
+def build_description(*, config: DatabaseNaming, taxids: Iterable[object], mode: str) -> str:
     """Prefill the terse ``{description}`` from a proteome selection.
 
     Joins the selected ``taxids`` with the naming ``separator`` and appends the

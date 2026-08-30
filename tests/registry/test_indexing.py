@@ -24,7 +24,8 @@ from tests.registry_support import Settings
 
 import protein_fasta.registry.indexing as registry
 from protein_fasta.analytics.hashing import sequence_hash
-from protein_fasta.build.metadata import build_sentinel_header
+from protein_fasta.database.metadata import build_sentinel_header
+from protein_fasta.database_compile import make_database_metadata
 from protein_fasta.diagnostics.runtime import DiagnosticRules
 from protein_fasta.record import ProteinDiagnostics
 from protein_fasta.registry.backend.base import (
@@ -62,7 +63,7 @@ def _write_database(path: Path, settings: Settings, *, changed: bool = False) ->
         "p1_db1_test",
         "SQLite registry test",
         datetime.date(2026, 7, 21),
-        settings.sentinel,
+        make_database_metadata(settings.sentinel),
     )
     sequence_a = "DDDD" if changed else "CCCC"
     path.write_text(
