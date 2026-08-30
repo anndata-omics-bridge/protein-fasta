@@ -1,5 +1,8 @@
 # Changes
 
+- 2026-08-30: Bumped the package to 0.3.0 for the breaking removal of the legacy combined-build
+  types and `build/` import paths.
+
 - 2026-08-30: Removed the peptide runtime's dependency on registry storage. Spill executors now
   exercise a peptide-owned partition-workspace capability; the root peptide workflow adapts the
   existing SQLite or DuckDB registry connection to that capability.

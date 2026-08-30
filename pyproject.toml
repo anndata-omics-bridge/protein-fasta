@@ -4,7 +4,7 @@ build-backend = "uv_build"
 
 [project]
 name = "protein-fasta"
-version = "0.2.0"
+version = "0.3.0"
 description = "Streaming protein records and config-driven Polars FASTA frames."
 readme = "README.md"
 requires-python = ">=3.13"
