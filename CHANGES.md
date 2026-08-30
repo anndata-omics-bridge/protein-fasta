@@ -1,5 +1,9 @@
 # Changes
 
+- 2026-08-30: Removed the peptide runtime's dependency on registry storage. Spill executors now
+  exercise a peptide-owned partition-workspace capability; the root peptide workflow adapts the
+  existing SQLite or DuckDB registry connection to that capability.
+
 - 2026-08-30: Began the final database-runtime cutover. Decoy and entrapment strategy documents now
   compile once at root boundaries into schema-independent runtime behavior; database naming and
   metadata have explicit runtime values; biological build results no longer contain decoy fields;

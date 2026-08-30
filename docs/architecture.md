@@ -82,7 +82,6 @@ remaining structural edges are explicit:
 | Importing child | Current dependency | Directed-folder consequence |
 | --- | --- | --- |
 | `registry/` | parent-root `compile`, `documents`, `record`, and `summary` | upward imports remain |
-| `peptide/` | sibling `analytics/` and sibling `registry/` | more than one direct sibling |
 | `registry/` | sibling `analytics/`, `database/`, `diagnostics/`, `reading/`, and `schema/` | more than one direct sibling |
 
 `uniprot/ -> reading/` uses one directed sibling edge and therefore does not violate the

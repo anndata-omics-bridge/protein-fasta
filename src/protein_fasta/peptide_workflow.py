@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import importlib.metadata
 import os
+import tempfile
+from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import cast
@@ -19,18 +21,24 @@ from protein_fasta.artifact_io import (
     write_json_atomic,
 )
 from protein_fasta.inventory import read_database_inventory
+from protein_fasta.peptide.computation import (
+    DigestedProtein,
+    PartitionDigestResult,
+    peptide_database_from_partitions,
+)
 from protein_fasta.peptide.executors import (
-    DuckDBPeptideExecutor,
     MemoryPeptideExecutor,
-    SQLitePeptideExecutor,
+    WorkspacePeptideExecutor,
 )
 from protein_fasta.peptide.models import (
     PeptideDatabase,
     PeptideExecutor,
     PeptideProtein,
+    PeptideProteinKind,
 )
 from protein_fasta.reading.parser import FastaRecord
 from protein_fasta.reading.writer import write_records
+from protein_fasta.registry.backend import factory
 from protein_fasta.schema.artifacts import ArtifactDocument
 from protein_fasta.schema.peptide import (
     DuckDBPeptideExecutionDocument,
@@ -371,9 +379,92 @@ def _make_executor(effective: EffectivePeptideBuildDocument) -> PeptideExecutor:
     execution = effective.execution
     if isinstance(execution, MemoryPeptideExecutionDocument):
         return MemoryPeptideExecutor(execution.workers, execution.partition_size)
-    if isinstance(execution, DuckDBPeptideExecutionDocument):
-        return DuckDBPeptideExecutor(execution.workers, execution.partition_size)
-    return SQLitePeptideExecutor(execution.workers, execution.partition_size)
+    backend = "duckdb" if isinstance(execution, DuckDBPeptideExecutionDocument) else "sqlite"
+    return WorkspacePeptideExecutor(
+        execution.workers,
+        execution.partition_size,
+        backend,
+        _RegistryPartitionWorkspace(backend),
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class _RegistryPartitionWorkspace:
+    """Temporary SQLite or DuckDB storage adapted to the peptide capability."""
+
+    backend: str
+
+    def merge(
+        self,
+        partitions: Iterable[PartitionDigestResult],
+        proteins: tuple[PeptideProtein, ...],
+    ) -> PeptideDatabase:
+        """Persist completed partitions, then merge them in stable index order."""
+        protein_by_order = {protein.ordinal: protein for protein in proteins}
+        with tempfile.NamedTemporaryFile(
+            prefix="protein-fasta-peptides-",
+            suffix=factory.suffix_for(self.backend),
+            delete=False,
+        ) as handle:
+            path = Path(handle.name)
+        path.unlink(missing_ok=True)
+        try:
+            with factory.connect(path, backend=self.backend) as connection:
+                connection.execute(
+                    "CREATE TABLE partition_rows ("
+                    "partition_index INTEGER NOT NULL, protein_order INTEGER NOT NULL, "
+                    "protein_id TEXT NOT NULL, protein_kind TEXT NOT NULL, "
+                    "sequence TEXT NOT NULL, missed_cleavages INTEGER NOT NULL)"
+                )
+                for partition in partitions:
+                    rows = [
+                        (
+                            partition.index,
+                            digested.protein.ordinal,
+                            digested.protein.identifier,
+                            digested.protein.kind,
+                            sequence,
+                            missed_cleavages,
+                        )
+                        for digested in partition.proteins
+                        for sequence, missed_cleavages in digested.peptides
+                    ]
+                    connection.executemany(
+                        "INSERT INTO partition_rows VALUES (?, ?, ?, ?, ?, ?)", rows
+                    )
+                records = connection.execute(
+                    "SELECT partition_index, protein_order, protein_id, protein_kind, "
+                    "sequence, missed_cleavages FROM partition_rows "
+                    "ORDER BY partition_index, protein_order, sequence"
+                ).fetchall()
+            grouped: dict[int, dict[tuple[int, str, str], list[tuple[str, int]]]] = {}
+            for row in records:
+                partition_index = int(row[0])
+                protein_key = (int(row[1]), str(row[2]), str(row[3]))
+                grouped.setdefault(partition_index, {}).setdefault(protein_key, []).append(
+                    (str(row[4]), int(row[5]))
+                )
+            results = tuple(
+                PartitionDigestResult(
+                    index,
+                    tuple(
+                        DigestedProtein(
+                            PeptideProtein(
+                                order,
+                                protein_id,
+                                cast("PeptideProteinKind", protein_kind),
+                                protein_by_order[order].sequence,
+                            ),
+                            tuple(peptides),
+                        )
+                        for (order, protein_id, protein_kind), peptides in sorted(group.items())
+                    ),
+                )
+                for index, group in sorted(grouped.items())
+            )
+            return peptide_database_from_partitions(results)
+        finally:
+            path.unlink(missing_ok=True)
 
 
 def _peptide_result_document(
