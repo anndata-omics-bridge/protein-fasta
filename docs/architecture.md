@@ -59,7 +59,8 @@ folder rule described below.
 | `analytics_compile.py` | Enzyme/digestion document compilation |
 | `database/`, `inventory.py` | Typed biological/search values and canonical Parquet projection |
 | `database/naming.py`, `database/metadata.py` | Database naming and `aa|` metadata construction |
-| `database/decoy*.py`, `database/entrapment.py` | Decoy and biological-entrapment runtime behavior |
+| `database/decoy.py`, `database/entrapment.py` | Dependency-free decoy and biological-entrapment runtime contracts and evidence |
+| `database/decoy_advanced.py`, `database/entrapment_advanced.py` | Optional `fdr_benchmark` generation implementations |
 | `database_compile.py`, `decoy_compile.py` | Passive build/strategy document compilation |
 | `protein_input.py`, `database_build.py` | Source preparation and biological assembly roots |
 | `decoy_database.py`, `decoy_report.py` | Search-database generation and method diagnostics |

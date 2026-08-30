@@ -1,5 +1,8 @@
 # Changes
 
+- 2026-08-30: Kept the credential-free public type-check aligned with the 0.3 runtime-module
+  locations, so public CI excludes only the two private advanced-generation adapters.
+
 - 2026-08-30: Bumped the package to 0.3.0 for the breaking removal of the legacy combined-build
   types and `build/` import paths.
 

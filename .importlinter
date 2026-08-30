@@ -39,7 +39,7 @@ containers =
     protein_fasta.database
 exhaustive = True
 layers =
-    decoy_advanced
+    decoy_advanced | entrapment_advanced
     decoy | entrapment | metadata | models | naming
 
 [importlinter:contract:registry-components]

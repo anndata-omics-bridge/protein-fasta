@@ -53,7 +53,7 @@ def make_entrapment_generation(
 ) -> EntrapmentGeneration:
     """Compile one entrapment document at the root composition boundary."""
     try:
-        from protein_fasta.database.entrapment import (
+        from protein_fasta.database.entrapment_advanced import (
             make_foreign_species_entrapment_generation,
             make_shuffled_entrapment_generation,
         )

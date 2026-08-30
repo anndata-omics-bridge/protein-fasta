@@ -20,7 +20,7 @@ from protein_fasta.documents import (
 
 _OPTIONAL_GENERATION_MODULES: Final = {
     "protein_fasta.database.decoy_advanced",
-    "protein_fasta.database.entrapment",
+    "protein_fasta.database.entrapment_advanced",
 }
 
 
