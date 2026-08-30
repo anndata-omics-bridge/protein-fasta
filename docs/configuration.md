@@ -32,6 +32,20 @@ used decoy prefixes (`REV_`, `DECOY_`, `reverse_`) and contaminant prefixes (`CO
 `CONTAMINANT_`). Application conventions do not belong here: for example, fasta_gen owns its
 `aa|`, `sp|Cont_`, `zh|C...`, and `_p_target` rules in its own JSON document.
 
+Use the packaged documents by omitting options, or consume explicit diagnostic and classifier JSON
+beside the command that uses them:
+
+```bash
+protein-fasta diagnostics database.fasta \
+  --rules rules/diagnostics.json \
+  --classifiers rules/classifiers.json
+```
+
+The diagnostic document's `schema_version` and `file_version` identify its contract and revision;
+`allowed_residues` defines valid normalized sequence symbols; and each
+`identifier_namespaces` member gives a reported `name` and matching `pattern`. Each classifier
+defines its label/output column plus match and removable prefix/suffix expressions.
+
 ## One rule file per database
 
 Release 0.2 activates exactly two database formats:
@@ -93,6 +107,19 @@ frame = read_configured_protein_frame(
 )
 ```
 
+The CLI consumes the same header-format and classifier documents:
+
+```bash
+protein-fasta configured database.fasta proteins.parquet \
+  --rules rules/uniprotkb.json \
+  --rules rules/refseq.json \
+  --classifiers rules/classifiers.json
+```
+
+Here each `--rules` document owns one format's detection expression and output columns;
+`--classifiers` owns independent labels and removable decorations. The complete validated fields
+are described above and in the packaged JSON Schemas.
+
 Committed JSON Schemas for diagnostics, classifiers, header formats, enzymes, source preparation,
 biological build, decoys, peptides, candidate review, UniProt, registries, and result evidence are
 packaged under `protein_fasta/documents/_schema/`. `make schemas` regenerates them deterministically.
@@ -116,6 +143,19 @@ file. The effective request and final `DatabaseBuildResultDocument` are written 
 biological FASTA. They do not contain decoy policy, registry rows, pair metrics, catalog selection,
 installation, or GUI state.
 
+The common build uses the packaged profile and authors its run request from CLI arguments. An
+explicit reusable profile is consumed by the same command:
+
+```bash
+protein-fasta build protein-input.parquet \
+  --output build --project 42261 --dbn 1 --description human
+protein-fasta build protein-input.parquet \
+  --request build/build.request.json --profile project-profile.json
+```
+
+The profile owns naming, metadata, and diagnostic defaults; the generated request owns this run's
+output, date, and naming values. The effective document records their resolved combination.
+
 The default metadata grammar constructs the first `aa|<dbname>|...` bookkeeping record with
 `CRAPCRAPCRAP` and contaminant section markers with `MRECRAPCRAPCRAP`. These are configuration,
 not special cases inside hashing or indexing.
@@ -129,7 +169,14 @@ fields are rejected when the Pydantic document loads rather than during a build.
 ## UniProt configuration
 
 A catalog request selects reference proteomes by default. All proteomes and an explicit provider
-query are different storage variants, so a query cannot conflict with an `all` switch:
+query are different storage variants, so a query cannot conflict with an `all` switch. The common
+first run authors the request from CLI arguments:
+
+```bash
+protein-fasta uniprot-catalog --output catalog
+```
+
+It writes this request inside `catalog/` before contacting UniProt:
 
 ```json
 {
@@ -137,12 +184,23 @@ query are different storage variants, so a query cannot conflict with an `all` s
   "selection": {
     "type": "reference"
   },
-  "output_dir": "catalog"
+  "output_dir": ".",
+  "timeout_seconds": 120.0
 }
 ```
 
+`schema_version` selects the request contract; `selection.type` chooses reference proteomes;
+`output_dir` is relative to the request file; and `timeout_seconds` records the provider timeout.
+Replay it with `protein-fasta uniprot-catalog --request catalog/uniprot-catalog.request.json`.
+
 A download selects exactly one taxon or one proteome identifier and exactly one acquisition mode.
-The reviewed form is:
+The common proteome-ID form starts directly:
+
+```bash
+protein-fasta uniprot-download UP000005640 reviewed --output human-reviewed.fasta
+```
+
+Taxonomy selection is an advanced authored request. Save this as `human-reviewed.request.json`:
 
 ```json
 {
@@ -154,27 +212,30 @@ The reviewed form is:
   "acquisition": {
     "type": "swissprot"
   },
-  "output_fasta": "human-reviewed.fasta"
+  "output_fasta": "human-reviewed.fasta",
+  "timeout_seconds": 120.0
 }
 ```
 
-Reviewed plus unreviewed and canonical-per-gene requests change only the acquisition member:
+`selection.type` chooses taxonomy resolution and `taxid` supplies the positive NCBI taxonomy ID;
+`acquisition.type` selects reviewed Swiss-Prot entries; `output_fasta` is relative to this request;
+and `schema_version` and `timeout_seconds` have the meanings described above. Execute it with:
 
-```json
-{
-  "type": "swissprot_trembl"
-}
+```bash
+protein-fasta uniprot-download --request human-reviewed.request.json
 ```
 
-```json
-{
-  "type": "one_seq_per_gene"
-}
-```
+Reviewed plus unreviewed changes `acquisition` to `{"type": "swissprot_trembl"}`;
+canonical-per-gene uses `{"type": "one_seq_per_gene"}`. The corresponding direct aliases are
+`canonical` and `opg`.
 
 Use `{"type": "proteome_id", "proteome_id": "UP000005640"}` instead of the taxid member for
 an explicit proteome. Runtime compilation creates one of two resolution behaviors and one of three
 acquisition behaviors. Invalid cross-mode field combinations are rejected while loading.
+
+Running `protein-fasta uniprot-download PROTEOME-ID MODE` writes the corresponding authored request
+before acquisition; `--request PATH` selects explicit replay without guessing whether a positional
+value is a proteome identifier or a file.
 
 ## Decoy and peptide configuration
 
@@ -184,12 +245,47 @@ one memory, SQLite, or DuckDB execution member with `workers` and `partition_siz
 documents are compiled once at the workflow root, and every peptide executor returns the same
 canonical peptide and mapping schemas.
 
+Digestion policy and enzyme rules remain separate. The first selects an enzyme name, length range,
+and missed-cleavage limit; the second gives that named enzyme a versioned `cleavage_pattern`:
+
+```bash
+protein-fasta digest database.fasta peptides.parquet \
+  --config digestion.json \
+  --rules enzymes/trypsin.json
+```
+
+In the enzyme JSON, `schema_version` selects the contract, `file_version` identifies the authored
+revision, `name` must equal the digestion document's `enzyme`, and `cleavage_pattern` is the regular
+expression compiled once before digestion.
+
+The common forms author those documents before running:
+
+```bash
+protein-fasta decoy biological-inventory.parquet \
+  --output search.fasta --method reverse
+protein-fasta peptides search-inventory.parquet \
+  --output peptide-products --enzyme trypsin
+```
+
+Direct decoy selection covers reverse and shuffle. Use the generated request beside each output as
+the starting point for DecoyPYrat, custom seeds, collision-digestion policy, or alternate peptide
+executor variants, then replay it with `--request PATH`.
+
 ## Registry configuration
 
 `RegistryDocument` contains the creation backend, maximum FASTA size, full-detail entry limit,
 metadata-only amino-acid sample size, optional minimum build date, overlap threshold, and the
 naming/metadata grammars needed to interpret the collection. The FASTA directory and registry
 path are operation arguments rather than hidden deployment defaults.
+
+Registry JSON is reusable policy rather than an automatically authored run request. Supply it
+beside the command that consumes it:
+
+```bash
+protein-fasta index fasta-directory registry.duckdb --config registry-policy.json
+protein-fasta index-inventory search-inventory.parquet registry.duckdb \
+  --config registry-policy.json
+```
 
 The configured backend controls creation. Reading dispatches from `.sqlite3` or `.duckdb`, so an
 existing registry remains readable when a default changes. The registry records its schema,

@@ -1,5 +1,11 @@
 # Changes
 
+- 2026-08-30: Made request-driven Cyclopts workflows direct-first. Common CLI arguments now author
+  a validated non-overwriting `*.request.json` before computation; `--request` explicitly replays
+  it and `--output` redirects replay products. Added explicit diagnostic and enzyme-rule CLI paths,
+  request/replay coverage across all workflows, and contextual executable documentation that
+  introduces and explains each JSON beside its consuming command.
+
 - 2026-08-28: Added a credential-free public Quality gate that checks every public capability while
   leaving only the private `fdr_benchmark` algorithm adapters to the full generation gate. Moved
   entrapment peptide-pair evidence and stable TSV serialization behind a dependency-free

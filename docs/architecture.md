@@ -5,7 +5,22 @@ biological construction, decoy generation, peptide construction, comparison, and
 persistence. `fasta_gen` is a consumer: it supplies site catalogs and policy, stages or installs
 approved artifacts, and presents results in Dash.
 
-The package is an explicit inward dependency structure enforced by Import Linter:
+## Delivery and public entry points
+
+The installed distribution declares one console script:
+
+```toml
+[project.scripts]
+protein-fasta = "protein_fasta.cli:main"
+```
+
+Cyclopts exposes the operations beneath that entry point as subcommands; `build`, `decoy`,
+`prepare`, `peptides`, `uniprot-download`, and the registry commands are not separate executables.
+Programmatic callers import the workflow functions from their owning modules. The package has no
+top-level re-export facade: empty package initializers keep ownership and dependency direction
+visible.
+
+The package has an explicit inward dependency structure enforced by Import Linter:
 
 ```text
 cli
@@ -25,14 +40,16 @@ focused computation and I/O
 ```
 
 This is an allowed-dependency graph, not a required call chain. Root composition modules may know
-several inward components; child packages do not import upward or across forbidden siblings. The
-exhaustive `.importlinter` contracts are the executable dependency definition.
+several inward components. The exhaustive `.importlinter` contracts enforce the current layered
+DAG and the framework/consumer isolation boundaries; they do not yet prove the stronger directed-
+folder rule described below.
 
 ## Module structure
 
 | Module or package | Responsibility |
 | --- | --- |
-| `cli.py` | Thin Cyclopts/Loguru delivery adapter |
+| `cli.py` | Single Cyclopts/Loguru delivery and composition adapter |
+| `artifact_io.py` | Atomic artifact publication, JSON persistence, and artifact evidence |
 | `record.py`, `frame.py` | Minimal Python records and optional Polars table products |
 | `diagnostic_summary.py`, `summary.py` | Aggregate diagnostic and sequence statistics |
 | `reading/`, `validation/` | Lexical I/O, FASTA writing, and fixed normalization |
@@ -54,6 +71,37 @@ exhaustive `.importlinter` contracts are the executable dependency definition.
 | `candidate_analysis.py`, `registry_workflow.py` | Read-only review and approved inventory indexing |
 | `schema/` | Passive, strict Pydantic storage documents |
 | `documents.py`, `documents/` | Explicit-path/resource loading and packaged rules |
+
+## Current dependency-structure status
+
+The current graph is acyclic and all Import Linter contracts pass. It is not yet a strict directed
+folder tree in which every child imports no parent module and at most one sibling package. The
+remaining structural edges are explicit:
+
+| Importing child | Current dependency | Directed-folder consequence |
+| --- | --- | --- |
+| `build/` | parent-root `analytics_compile` | upward import remains |
+| `registry/` | parent-root `compile`, `documents`, `record`, and `summary` | upward imports remain |
+| `peptide/` | sibling `analytics/` and sibling `registry/` | more than one direct sibling |
+| `registry/` | sibling `analytics/`, `database/`, `diagnostics/`, `reading/`, and `schema/` | more than one direct sibling |
+
+`build/ -> schema/` and `uniprot/ -> reading/` each use one directed sibling edge and therefore do
+not violate the sibling-count rule. The existing architecture tests additionally keep every
+initializer empty, name the root modules allowed to compose multiple children, and constrain the
+CLI's imported package components. A future folder migration must move ownership or composition;
+adding forwarding modules solely to hide these edges would not improve the architecture.
+
+## Runtime behavior and storage documents
+
+The UniProt and peptide workflows compile passive discriminator documents once at their root into
+runtime objects that own resolution, acquisition, or execution behavior. Those branches are
+storage-boundary factories, not missing methods on the Pydantic documents.
+
+One decoy migration residual remains: `decoy_database` and `decoy_report` independently translate
+the same reverse/shuffle/DecoyPYrat strategy document into the older `DecoyDocument` consumed by
+`make_decoy_generation()`. The runtime `DecoyGeneration` protocol is the correct behavioral
+boundary, but the storage-to-runtime compilation needs one shared composition owner before the
+legacy document can be retired.
 
 ## Build stages are explicit
 
@@ -103,15 +151,22 @@ publish SHA-256 remain verified with SHA-256; that authored integrity contract i
 ## Parameters and exchange artifacts
 
 Pydantic models in `schema/` are passive storage documents. They validate serialized parameters
-but do not perform FASTA work. Root loading and compilation boundaries construct schema-free
-runtime values. The only discriminator branches belong at those construction boundaries;
-downstream code invokes the selected behavior.
+but do not perform FASTA work. Root loading and compilation boundaries construct runtime values.
+Discriminator branches belong at those construction boundaries; downstream code invokes the
+selected behavior. The duplicate decoy compilation bridge documented above is the remaining
+exception, not the intended pattern.
 
 Each workflow writes effective parameters before computation and typed result evidence after its
 data artifacts are durably published. Canonical protein, search, peptide, mapping, comparison,
 catalog, and registry exchanges are Parquet; FASTA remains the search-tool exchange; parameter and
 result evidence use JSON. Header parsers remain one independently authored document per source
 database.
+
+The CLI normally starts from concise direct arguments, constructs the same passive request document,
+and persists it without replacement before calling the shared resolver and runner. `--request`
+explicitly selects replay; an output override may redirect products, while direct scientific options
+cannot be mixed into replay. This keeps interactive use reproducible without introducing a second
+workflow API or inferring whether a positional string is a request path.
 
 ## Optional dependencies and consumers
 

@@ -99,10 +99,15 @@ protein-fasta formats database.fasta formats.csv
 protein-fasta diagnostics database.fasta
 protein-fasta digest database.fasta peptides.parquet
 protein-fasta checksum database.fasta
-protein-fasta prepare source-selection.json
-protein-fasta build protein-input.parquet biological-build.json
-protein-fasta decoy biological.fasta.protein-inventory.parquet reverse-decoys.json
-protein-fasta peptides search-inventory.parquet peptides.json
+protein-fasta uniprot-download UP000000589 opg
+protein-fasta prepare human.fasta protein-input.parquet --id human-uniprot
+protein-fasta build protein-input.parquet \
+  --output build --project 42261 --dbn 1 --description human
+protein-fasta decoy biological.fasta.protein-inventory.parquet \
+  --output search.fasta --method reverse
+protein-fasta peptides search-inventory.parquet --output peptide-products
+protein-fasta prepare --request protein-input.parquet.request.json \
+  --output replayed-protein-input.parquet
 protein-fasta index databases registry.sqlite3
 protein-fasta index-inventory search-inventory.parquet registry.duckdb --config registry.json
 protein-fasta registry registry.sqlite3 databases.csv
@@ -111,10 +116,14 @@ protein-fasta pairs registry.sqlite3 pairs.tsv
 protein-fasta cluster registry.sqlite3 clustering.csv
 ```
 
+Direct workflow commands write their validated authored `*.request.json` before computation.
+Replay one explicitly with `--request`; authored requests, resolved `*.effective.json`, observed
+`*.result.json`, and data artifacts remain separate.
+
 The CLI also exposes aggregate diagnostics, theoretical digestion, checksums, database builds,
 registry indexing, database comparisons, materialized pair exports, and clustering. See the
-[build workflows](docs/workflows.md), [CLI guide](docs/cli.md),
-[executable CLI walkthrough](docs/cli_walkthrough.md),
+[build workflows](docs/workflows.md),
+[CLI guide and executable walkthrough](docs/cli_walkthrough.md),
 [API reference](docs/api.md), and maintained
 [architecture](docs/architecture.md).
 

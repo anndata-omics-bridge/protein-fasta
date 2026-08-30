@@ -146,7 +146,7 @@ def test_peptides_cli_matches_api_and_comparison_is_exact(tmp_path: Path) -> Non
         encoding="utf-8",
     )
 
-    cli.peptides(inventory, request_path)
+    cli.peptides(inventory, request=request_path)
 
     cli_peptides = tmp_path / "cli-peptides.parquet"
     assert read_peptides(api.peptides_path).rows() == read_peptides(cli_peptides).rows()
@@ -160,6 +160,65 @@ def test_peptides_cli_matches_api_and_comparison_is_exact(tmp_path: Path) -> Non
     )
     rows = read_peptide_comparisons(comparison.comparison_path)
     assert rows["jaccard"].to_list() == [1.0] * 5
+
+
+def test_peptide_commands_author_requests_and_replay_with_new_outputs(tmp_path: Path) -> None:
+    inventory = _inventory(tmp_path / "search.parquet")
+    direct_dir = tmp_path / "direct"
+
+    cli.peptides(inventory, output=direct_dir, minimum=3, maximum=30, missed=1)
+
+    request_path = direct_dir / "peptides.request.json"
+    payload = json.loads(request_path.read_text(encoding="utf-8"))
+    assert payload == {
+        "digestion": {
+            "enzyme": "trypsin",
+            "max_length": 30,
+            "min_length": 3,
+            "missed_cleavages": 1,
+        },
+        "execution": {"partition_size": 500, "type": "memory", "workers": 1},
+        "mapping_parquet": "protein-peptide-map.parquet",
+        "peptide_fasta": "peptides.fasta",
+        "peptides_parquet": "peptides.parquet",
+        "schema_version": "0.1",
+    }
+    replay_dir = tmp_path / "replay"
+    cli.peptides(inventory, request=request_path, output=replay_dir)
+    assert (
+        read_peptides(direct_dir / "peptides.parquet").rows()
+        == read_peptides(replay_dir / "peptides.parquet").rows()
+    )
+
+    saved_dir = tmp_path / "saved"
+    saved_request = tmp_path / "requests" / "peptides.json"
+    cli.peptides(inventory, output=saved_dir, save=saved_request)
+    saved_payload = json.loads(saved_request.read_text(encoding="utf-8"))
+    assert saved_payload["peptides_parquet"] == "../saved/peptides.parquet"
+    assert (saved_dir / "peptides.parquet").is_file()
+
+    comparison = tmp_path / "direct-comparison.parquet"
+    cli.pepcompare(
+        direct_dir / "peptides.parquet",
+        replay_dir / "peptides.parquet",
+        output=comparison,
+    )
+    comparison_request = comparison.with_suffix(".parquet.request.json")
+    assert json.loads(comparison_request.read_text(encoding="utf-8")) == {
+        "output_parquet": "direct-comparison.parquet",
+        "schema_version": "0.1",
+    }
+    replay_comparison = tmp_path / "replay-comparison.parquet"
+    cli.pepcompare(
+        direct_dir / "peptides.parquet",
+        replay_dir / "peptides.parquet",
+        request=comparison_request,
+        output=replay_comparison,
+    )
+    assert (
+        read_peptide_comparisons(comparison).rows()
+        == read_peptide_comparisons(replay_comparison).rows()
+    )
 
 
 def test_repeated_protein_identifier_produces_one_canonical_mapping() -> None:

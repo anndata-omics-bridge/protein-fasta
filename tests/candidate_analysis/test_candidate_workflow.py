@@ -114,9 +114,37 @@ def test_candidate_cli_and_api_write_identical_comparison_rows(tmp_path: Path) -
     config_path = tmp_path / "registry.json"
     config_path.write_text(json.dumps(document.model_dump(mode="json")), encoding="utf-8")
 
-    cli.candidate(inventory, registry, request_path, config=config_path)
+    cli.candidate(inventory, registry, request=request_path, config=config_path)
 
     assert (
         read_candidate_comparisons(api.comparison_path).rows()
         == read_candidate_comparisons(tmp_path / "cli.parquet").rows()
     )
+
+
+def test_candidate_direct_authors_request_and_replays(tmp_path: Path) -> None:
+    inventory = _inventory(tmp_path / "candidate.parquet")
+    registry, document = _registry(tmp_path, "sqlite")
+    config_path = tmp_path / "registry.json"
+    config_path.write_text(json.dumps(document.model_dump(mode="json")), encoding="utf-8")
+    output = tmp_path / "direct.parquet"
+
+    cli.candidate(inventory, registry, output=output, config=config_path, limit=10)
+
+    request_path = output.with_suffix(".parquet.request.json")
+    assert json.loads(request_path.read_text(encoding="utf-8")) == {
+        "clustering_metric": "target_ids",
+        "neighbour_limit": 10,
+        "output_parquet": "direct.parquet",
+        "overlap_threshold": 0.99,
+        "schema_version": "0.1",
+    }
+    replay = tmp_path / "replay.parquet"
+    cli.candidate(
+        inventory,
+        registry,
+        request=request_path,
+        output=replay,
+        config=config_path,
+    )
+    assert read_candidate_comparisons(output).rows() == read_candidate_comparisons(replay).rows()

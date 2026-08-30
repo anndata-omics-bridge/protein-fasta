@@ -12,7 +12,7 @@ from zensical.extensions.macros import MacroEnv
 
 _PROJECT_ROOT = Path(__file__).parent
 _WORK_DIRECTORY = tempfile.TemporaryDirectory(prefix="protein-fasta-cli-docs-")
-_WORK_PATH = Path(_WORK_DIRECTORY.name)
+_WORK_PATH = Path(_WORK_DIRECTORY.name).resolve()
 _ANSI_ESCAPE = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")
 _LOGURU_PREFIX = re.compile(r"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} \| [A-Z]+\s+\| .*? - ")
 

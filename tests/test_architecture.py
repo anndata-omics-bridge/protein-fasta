@@ -70,6 +70,7 @@ def test_cli_composes_only_authorized_package_components() -> None:
     assert {module.split(".")[1] for module in imported_modules} == {
         "analytics",
         "analytics_compile",
+        "artifact_io",
         "compile",
         "candidate_analysis",
         "database_build",

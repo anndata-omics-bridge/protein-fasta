@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import datetime
+import os
 import sys
 from collections.abc import Callable
 from pathlib import Path
+from typing import Literal
 
 import polars as pl
 from cyclopts import App
@@ -20,7 +22,8 @@ from protein_fasta.analytics.hashing import (
     file_checksum,
     sequence_hash,
 )
-from protein_fasta.analytics_compile import make_digestion
+from protein_fasta.analytics_compile import compile_digestion, make_digestion
+from protein_fasta.artifact_io import write_json_atomic
 from protein_fasta.candidate_analysis import (
     resolve_candidate_request,
     run_candidate_analysis,
@@ -52,8 +55,10 @@ from protein_fasta.documents import (
     load_decoy_report_request,
     load_decoy_request,
     load_derived_protein_input_request,
+    load_diagnostic_document,
     load_digestion_document,
     load_entry_classifier_document,
+    load_enzyme_document,
     load_header_format_catalog,
     load_peptide_build_request,
     load_peptide_comparison_request,
@@ -101,8 +106,37 @@ from protein_fasta.registry.indexing import (
 from protein_fasta.registry.kinds import EntryKind
 from protein_fasta.registry_workflow import index_database_inventory, make_registry_settings
 from protein_fasta.schema.analytics import DigestionDocument
+from protein_fasta.schema.base import DocumentBase
+from protein_fasta.schema.build import DatabaseBuildRequestDocument
+from protein_fasta.schema.candidate import CandidateRequestDocument
+from protein_fasta.schema.decoy import (
+    DecoyRequestDocument,
+    DecoyStrategyDocument,
+    ReverseDecoyDocument,
+    ShuffleDecoyDocument,
+)
+from protein_fasta.schema.decoy_report import DecoyReportRequestDocument
+from protein_fasta.schema.peptide import (
+    MemoryPeptideExecutionDocument,
+    PeptideBuildRequestDocument,
+    PeptideComparisonRequestDocument,
+)
+from protein_fasta.schema.protein_input import (
+    DerivedProteinInputRequestDocument,
+    ProteinInputRequestDocument,
+    TargetProteinSourceDocument,
+)
 from protein_fasta.schema.registry import RegistryDocument
-from protein_fasta.schema.uniprot import UniProtCatalogRequestDocument
+from protein_fasta.schema.uniprot import (
+    CanonicalGeneDownloadDocument,
+    CompleteDownloadDocument,
+    ProteomeIdSelectionDocument,
+    ReferenceProteomesDocument,
+    ReviewedDownloadDocument,
+    UniProtAcquisitionDocument,
+    UniProtCatalogRequestDocument,
+    UniProtDownloadRequestDocument,
+)
 from protein_fasta.uniprot_catalog import (
     filter_uniprot_catalog,
     read_uniprot_catalog,
@@ -115,6 +149,21 @@ from protein_fasta.uniprot_download import (
 )
 
 type _TableWriter = Callable[[pl.DataFrame, Path], None]
+type _UniProtDownloadCliMode = Literal["reviewed", "canonical", "opg"]
+type _DecoyCliMethod = Literal["reverse", "shuffle"]
+
+_UNIPROT_ACQUISITION_BY_CLI_MODE: dict[
+    _UniProtDownloadCliMode,
+    UniProtAcquisitionDocument,
+] = {
+    "reviewed": ReviewedDownloadDocument(),
+    "canonical": CompleteDownloadDocument(),
+    "opg": CanonicalGeneDownloadDocument(),
+}
+_DECOY_STRATEGY_BY_CLI_METHOD: dict[_DecoyCliMethod, DecoyStrategyDocument] = {
+    "reverse": ReverseDecoyDocument(),
+    "shuffle": ShuffleDecoyDocument(seed=2000),
+}
 
 app = App(
     name="protein-fasta",
@@ -158,6 +207,51 @@ def _writer_for(path: Path) -> _TableWriter:
 def _cli_path(path: Path, /) -> Path:
     """Resolve one command-line path against the caller's working directory."""
     return path.resolve()
+
+
+def _recorded_path(path: Path, base: Path, /) -> Path:
+    """Return a path recorded relative to its authored request when possible."""
+    return Path(os.path.relpath(_cli_path(path), _cli_path(base)))
+
+
+def _request_path(primary_output: Path, save: Path | None, /) -> Path:
+    """Select the non-overwriting authored-request destination."""
+    if save is not None:
+        return _cli_path(save)
+    output = _cli_path(primary_output)
+    return output.with_suffix(f"{output.suffix}.request.json")
+
+
+def _directory_request_path(output_dir: Path, command: str, save: Path | None, /) -> Path:
+    """Select an authored-request path for a multi-artifact output directory."""
+    if save is not None:
+        return _cli_path(save)
+    return _cli_path(output_dir) / f"{command}.request.json"
+
+
+def _write_authored_request(path: Path, document: DocumentBase, /) -> None:
+    """Persist one validated direct-CLI request without replacing prior intent."""
+    payload = document.model_dump(mode="json", exclude_none=True)
+    write_json_atomic(
+        path,
+        payload,
+        replace_existing=False,
+    )
+    logger.info("Wrote authored request to {}", path)
+
+
+def _reject_replay_options(request: Path | None, **options: object) -> None:
+    """Reject direct-only parameters when an authored request is replayed."""
+    supplied = sorted(name for name, value in options.items() if value is not None)
+    if request is not None and supplied:
+        rendered = ", ".join(f"--{name.replace('_', '-')}" for name in supplied)
+        raise ValueError(f"{rendered} cannot be combined with --request")
+
+
+def _require_direct(value: object | None, option: str, /) -> None:
+    """Require one direct-mode value after replay mode has been excluded."""
+    if value is None:
+        raise ValueError(f"direct mode requires --{option}")
 
 
 def _export_frame(
@@ -362,17 +456,26 @@ def _log_diagnostics_summary(summary: ProteinDiagnosticsSummary) -> None:
 
 
 @app.command
-def diagnostics(fasta_path: Path) -> None:
+def diagnostics(
+    fasta_path: Path,
+    *,
+    rules: Path | None = None,
+    classifiers: Path | None = None,
+) -> None:
     """Summarize built-in record diagnostics for one FASTA database.
 
     Args:
         fasta_path: Plain, gzip, or bzip2 protein FASTA input.
+        rules: Optional explicit diagnostic-rules JSON.
+        classifiers: Optional explicit entry-classifier JSON.
     """
-    rules = make_diagnostic_rules(
-        load_builtin_diagnostic_document(),
-        load_builtin_entry_classifier_document(),
+    runtime_rules = make_diagnostic_rules(
+        load_builtin_diagnostic_document() if rules is None else load_diagnostic_document(rules),
+        load_builtin_entry_classifier_document()
+        if classifiers is None
+        else load_entry_classifier_document(classifiers),
     )
-    summary = summarize_protein_diagnostics(iter_protein_diagnostics(fasta_path, rules))
+    summary = summarize_protein_diagnostics(iter_protein_diagnostics(fasta_path, runtime_rules))
     _log_diagnostics_summary(summary)
 
 
@@ -382,6 +485,7 @@ def digest(
     table_path: Path,
     *,
     config: Path | None = None,
+    rules: Path | None = None,
 ) -> None:
     """Export theoretical peptides and missed-cleavage counts.
 
@@ -389,9 +493,14 @@ def digest(
         fasta_path: Plain, gzip, or bzip2 protein FASTA input.
         table_path: Output path ending in ``.csv``, ``.tsv``, ``.xlsx``, or ``.parquet``.
         config: Optional digestion JSON; packaged trypsin defaults are used when omitted.
+        rules: Optional explicit enzyme-rules JSON.
     """
     document = load_digestion_document(config) if config is not None else DigestionDocument()
-    digestion = make_digestion(document)
+    digestion = (
+        make_digestion(document)
+        if rules is None
+        else compile_digestion(document, load_enzyme_document(rules))
+    )
     rows = [
         {
             "protein_id": protein.id,
@@ -410,16 +519,86 @@ def digest(
 
 
 @app.command
-def peptides(inventory_path: Path, request_path: Path) -> None:
-    """Build canonical peptide, mapping, and unique FASTA artifacts.
+def peptides(
+    inventory_path: Path,
+    *,
+    request: Path | None = None,
+    output: Path | None = None,
+    enzyme: str | None = None,
+    minimum: int | None = None,
+    maximum: int | None = None,
+    missed: int | None = None,
+    workers: int | None = None,
+    partition: int | None = None,
+    save: Path | None = None,
+) -> None:
+    """Build peptide artifacts from direct arguments or an authored request.
 
     Args:
         inventory_path: Canonical biological or search inventory Parquet.
-        request_path: Peptide-build request JSON.
+        request: Existing peptide-build request JSON to replay.
+        output: Direct output directory, or replay output-directory override.
+        enzyme: Direct enzyme name; packaged trypsin is the default.
+        minimum: Direct minimum peptide length.
+        maximum: Direct maximum peptide length.
+        missed: Direct maximum missed cleavages.
+        workers: Direct worker count for the memory executor.
+        partition: Direct proteins per deterministic partition.
+        save: Optional authored-request destination for a direct run.
     """
+    _reject_replay_options(
+        request,
+        enzyme=enzyme,
+        minimum=minimum,
+        maximum=maximum,
+        missed=missed,
+        workers=workers,
+        partition=partition,
+        save=save,
+    )
+    if request is None:
+        _require_direct(output, "output")
+        assert output is not None
+        request_path = _directory_request_path(output, "peptides", save)
+        request_base = request_path.parent
+        destination = _cli_path(output)
+        digestion = DigestionDocument(
+            enzyme="trypsin" if enzyme is None else enzyme,
+            min_length=7 if minimum is None else minimum,
+            max_length=50 if maximum is None else maximum,
+            missed_cleavages=0 if missed is None else missed,
+        )
+        execution = MemoryPeptideExecutionDocument(
+            workers=1 if workers is None else workers,
+            partition_size=500 if partition is None else partition,
+        )
+        document = PeptideBuildRequestDocument(
+            peptides_parquet=_recorded_path(destination / "peptides.parquet", request_base),
+            mapping_parquet=_recorded_path(
+                destination / "protein-peptide-map.parquet",
+                request_base,
+            ),
+            peptide_fasta=_recorded_path(destination / "peptides.fasta", request_base),
+            digestion=digestion,
+            execution=execution,
+        )
+        _write_authored_request(request_path, document)
+    else:
+        request_path = _cli_path(request)
+        request_base = request_path.parent
+        document = load_peptide_build_request(request_path)
+        if output is not None:
+            destination = _cli_path(output)
+            document = document.model_copy(
+                update={
+                    "peptides_parquet": destination / document.peptides_parquet.name,
+                    "mapping_parquet": destination / document.mapping_parquet.name,
+                    "peptide_fasta": destination / document.peptide_fasta.name,
+                }
+            )
     effective = resolve_peptide_build_request(
-        load_peptide_build_request(request_path),
-        request_base=request_path.resolve().parent,
+        document,
+        request_base=request_base,
     )
     execution = run_peptide_build(_cli_path(inventory_path), effective)
     logger.info("Wrote peptide-build evidence to {}", execution.result_path)
@@ -429,18 +608,38 @@ def peptides(inventory_path: Path, request_path: Path) -> None:
 def pepcompare(
     peptides_a: Path,
     peptides_b: Path,
-    request_path: Path,
+    *,
+    request: Path | None = None,
+    output: Path | None = None,
+    save: Path | None = None,
 ) -> None:
-    """Compare two canonical peptide inventories exactly.
+    """Compare peptide inventories from direct arguments or an authored request.
 
     Args:
         peptides_a: First canonical peptides Parquet.
         peptides_b: Second canonical peptides Parquet.
-        request_path: Peptide-comparison request JSON.
+        request: Existing peptide-comparison request JSON to replay.
+        output: Direct comparison Parquet, or replay output override.
+        save: Optional authored-request destination for a direct run.
     """
+    _reject_replay_options(request, save=save)
+    if request is None:
+        _require_direct(output, "output")
+        assert output is not None
+        destination = _cli_path(output)
+        request_path = _request_path(destination, save)
+        document = PeptideComparisonRequestDocument(
+            output_parquet=_recorded_path(destination, request_path.parent)
+        )
+        _write_authored_request(request_path, document)
+    else:
+        request_path = _cli_path(request)
+        document = load_peptide_comparison_request(request_path)
+        if output is not None:
+            document = document.model_copy(update={"output_parquet": _cli_path(output)})
     effective = resolve_peptide_comparison_request(
-        load_peptide_comparison_request(request_path),
-        request_base=request_path.resolve().parent,
+        document,
+        request_base=request_path.parent,
     )
     execution = run_peptide_comparison(
         _cli_path(peptides_a),
@@ -471,29 +670,41 @@ def checksum(fasta_path: Path) -> None:
 
 @app.command(name="uniprot-catalog")
 def uniprot_catalog(
-    request_path: Path,
     *,
-    output_dir: Path | None = None,
-    timeout_seconds: float | None = None,
+    request: Path | None = None,
+    output: Path | None = None,
+    timeout: float | None = None,
+    save: Path | None = None,
 ) -> None:
-    """Synchronize one immutable local UniProt proteome-catalog snapshot.
+    """Synchronize a UniProt catalog from direct arguments or an authored request.
 
     Args:
-        request_path: UniProt catalog request JSON.
-        output_dir: Optional explicit output-directory override.
-        timeout_seconds: Optional HTTP timeout override.
+        request: Existing UniProt catalog request JSON to replay.
+        output: Direct catalog directory, or replay output-directory override.
+        timeout: Direct provider timeout in seconds.
+        save: Optional authored-request destination for a direct run.
     """
-    request = load_uniprot_catalog_request(request_path)
-    updates: dict[str, object] = {}
-    if output_dir is not None:
-        updates["output_dir"] = _cli_path(output_dir)
-    if timeout_seconds is not None:
-        updates["timeout_seconds"] = timeout_seconds
-    if updates:
-        request = UniProtCatalogRequestDocument.model_validate(request.model_dump() | updates)
+    _reject_replay_options(request, timeout=timeout, save=save)
+    if request is None:
+        _require_direct(output, "output")
+        assert output is not None
+        request_path = _directory_request_path(output, "uniprot-catalog", save)
+        request_base = request_path.parent
+        document = UniProtCatalogRequestDocument(
+            output_dir=_recorded_path(output, request_base),
+            selection=ReferenceProteomesDocument(),
+            timeout_seconds=120.0 if timeout is None else timeout,
+        )
+        _write_authored_request(request_path, document)
+    else:
+        request_path = _cli_path(request)
+        request_base = request_path.parent
+        document = load_uniprot_catalog_request(request_path)
+        if output is not None:
+            document = document.model_copy(update={"output_dir": _cli_path(output)})
     execution = sync_uniprot_catalog(
-        request,
-        request_base=request_path.resolve().parent,
+        document,
+        request_base=request_base,
     )
     logger.info(
         "Wrote {} UniProt proteomes to {}",
@@ -524,25 +735,52 @@ def uniprot_proteomes(
 
 @app.command(name="uniprot-download")
 def uniprot_download(
-    request_path: Path,
+    source: str | None = None,
+    mode: _UniProtDownloadCliMode | None = None,
     *,
-    output_fasta: Path | None = None,
-    timeout_seconds: float | None = None,
+    request: Path | None = None,
+    output: Path | None = None,
+    timeout: float | None = None,
+    save: Path | None = None,
 ) -> None:
-    """Acquire one UniProt proteome FASTA without building or adding decoys.
+    """Acquire one UniProt proteome FASTA from direct arguments or a request document.
 
     Args:
-        request_path: UniProt download request JSON.
-        output_fasta: Optional explicit FASTA destination override.
-        timeout_seconds: Optional HTTP timeout override.
+        source: Direct UniProt proteome identifier.
+        mode: Direct mode: reviewed, canonical, or one protein per gene (opg).
+        request: Existing UniProt download request JSON to replay.
+        output: Direct FASTA destination, or replay output override.
+        timeout: Direct provider timeout in seconds.
+        save: Optional authored-request destination for a direct run.
     """
-    request = load_uniprot_download_request(request_path)
+    _reject_replay_options(request, source=source, mode=mode, timeout=timeout, save=save)
+    if request is None:
+        _require_direct(source, "source")
+        _require_direct(mode, "mode")
+        assert source is not None
+        assert mode is not None
+        destination = _cli_path(output if output is not None else Path(f"{source}_{mode}.fasta"))
+        request_path = _request_path(destination, save)
+        document = UniProtDownloadRequestDocument(
+            selection=ProteomeIdSelectionDocument(proteome_id=source),
+            acquisition=_UNIPROT_ACQUISITION_BY_CLI_MODE[mode],
+            output_fasta=_recorded_path(destination, request_path.parent),
+            timeout_seconds=120.0 if timeout is None else timeout,
+        )
+        _write_authored_request(request_path, document)
+        request_base = request_path.parent
+        output_override = None
+    else:
+        request_path = _cli_path(request)
+        request_base = request_path.parent
+        document = load_uniprot_download_request(request_path)
+        output_override = None if output is None else _cli_path(output)
     effective = resolve_uniprot_download(
-        request,
-        request_base=request_path.resolve().parent,
+        document,
+        request_base=request_base,
         overrides=UniProtDownloadOverrides(
-            output_fasta=None if output_fasta is None else _cli_path(output_fasta),
-            timeout_seconds=timeout_seconds,
+            output_fasta=output_override,
+            timeout_seconds=None,
         ),
     )
     execution = run_uniprot_download(effective)
@@ -550,36 +788,106 @@ def uniprot_download(
 
 
 @app.command
-def prepare(request_path: Path) -> None:
-    """Prepare ordered FASTA sources as the canonical protein-input Parquet.
+def prepare(
+    fasta_path: Path | None = None,
+    output: Path | None = None,
+    *,
+    id: str | None = None,
+    request: Path | None = None,
+    save: Path | None = None,
+) -> None:
+    """Prepare one target FASTA directly or replay an authored source request.
 
     Args:
-        request_path: Protein-input request JSON containing source roles and output path.
+        fasta_path: Direct target FASTA source.
+        output: Direct protein-input Parquet, or replay output override.
+        id: Direct stable source identifier.
+        request: Existing protein-input request JSON to replay.
+        save: Optional authored-request destination for a direct run.
     """
-    request = load_protein_input_request(request_path)
+    _reject_replay_options(request, fasta_path=fasta_path, id=id, save=save)
+    if request is None:
+        _require_direct(fasta_path, "fasta-path")
+        _require_direct(output, "output")
+        _require_direct(id, "id")
+        assert fasta_path is not None
+        assert output is not None
+        assert id is not None
+        destination = _cli_path(output)
+        request_path = _request_path(destination, save)
+        request_base = request_path.parent
+        document = ProteinInputRequestDocument(
+            sources=(
+                TargetProteinSourceDocument(
+                    source_id=id,
+                    path=_recorded_path(fasta_path, request_base),
+                ),
+            ),
+            output_parquet=_recorded_path(destination, request_base),
+        )
+        _write_authored_request(request_path, document)
+    else:
+        request_path = _cli_path(request)
+        request_base = request_path.parent
+        document = load_protein_input_request(request_path)
+        if output is not None:
+            document = document.model_copy(update={"output_parquet": _cli_path(output)})
     effective = resolve_protein_input_request(
-        request,
-        request_base=request_path.resolve().parent,
+        document,
+        request_base=request_base,
     )
     execution = run_protein_input_preparation(effective)
     logger.info("Wrote protein-input evidence to {}", execution.result_path)
 
 
 @app.command(name="derive-input")
-def derive_input(request_path: Path) -> None:
-    """Prepare clean source rows from an existing biological or search inventory.
+def derive_input(
+    source_inventory: Path | None = None,
+    output: Path | None = None,
+    *,
+    id: str | None = None,
+    request: Path | None = None,
+    save: Path | None = None,
+) -> None:
+    """Derive clean source rows directly or replay an authored request.
 
     The source retains target and contaminant proteins. Existing sentinel,
     section-marker, entrapment, and decoy rows are excluded. An optional second
     inventory supplies foreign proteins for a subsequent entrapment build.
 
     Args:
-        request_path: Derived protein-input request JSON with inventory paths and output.
+        source_inventory: Direct biological or search inventory source.
+        output: Direct protein-input Parquet, or replay output override.
+        id: Direct stable source identifier.
+        request: Existing derived protein-input request JSON to replay.
+        save: Optional authored-request destination for a direct run.
     """
-    request = load_derived_protein_input_request(request_path)
+    _reject_replay_options(request, source_inventory=source_inventory, id=id, save=save)
+    if request is None:
+        _require_direct(source_inventory, "source-inventory")
+        _require_direct(output, "output")
+        _require_direct(id, "id")
+        assert source_inventory is not None
+        assert output is not None
+        assert id is not None
+        destination = _cli_path(output)
+        request_path = _request_path(destination, save)
+        request_base = request_path.parent
+        document = DerivedProteinInputRequestDocument(
+            source_inventory=_recorded_path(source_inventory, request_base),
+            source_id=id,
+            output_parquet=_recorded_path(destination, request_base),
+        )
+        _write_authored_request(request_path, document)
+    else:
+        request_path = _cli_path(request)
+        request_base = request_path.parent
+        document = load_derived_protein_input_request(request_path)
+        if output is not None:
+            document = document.model_copy(update={"output_parquet": _cli_path(output)})
     effective = resolve_derived_protein_input_request(
-        request,
-        request_base=request_path.resolve().parent,
+        document,
+        request_base=request_base,
     )
     execution = run_derived_protein_input_preparation(effective)
     logger.info("Wrote derived protein-input evidence to {}", execution.result_path)
@@ -588,26 +896,50 @@ def derive_input(request_path: Path) -> None:
 @app.command
 def decoy(
     biological_inventory: Path,
-    request_path: Path,
     *,
-    output_fasta: Path | None = None,
-    decoy_prefix: str | None = None,
+    request: Path | None = None,
+    output: Path | None = None,
+    method: _DecoyCliMethod | None = None,
+    prefix: str | None = None,
+    save: Path | None = None,
 ) -> None:
-    """Generate one search database from a biological protein inventory.
+    """Generate a search database from direct arguments or an authored request.
 
     Args:
         biological_inventory: Existing decoy-free protein-inventory Parquet.
-        request_path: Decoy request JSON containing exactly one strategy.
-        output_fasta: Optional explicit search-FASTA destination override.
-        decoy_prefix: Optional explicit generated-header prefix override.
+        request: Existing decoy request JSON to replay.
+        output: Direct search FASTA, or replay output override.
+        method: Direct decoy method.
+        prefix: Direct generated-header prefix.
+        save: Optional authored-request destination for a direct run.
     """
-    request = load_decoy_request(request_path)
+    _reject_replay_options(request, method=method, prefix=prefix, save=save)
+    if request is None:
+        _require_direct(output, "output")
+        _require_direct(method, "method")
+        assert output is not None
+        assert method is not None
+        destination = _cli_path(output)
+        request_path = _request_path(destination, save)
+        request_base = request_path.parent
+        document = DecoyRequestDocument(
+            output_fasta=_recorded_path(destination, request_base),
+            decoy_prefix="REV_" if prefix is None else prefix,
+            strategy=_DECOY_STRATEGY_BY_CLI_METHOD[method],
+        )
+        _write_authored_request(request_path, document)
+        output_override = None
+    else:
+        request_path = _cli_path(request)
+        request_base = request_path.parent
+        document = load_decoy_request(request_path)
+        output_override = None if output is None else _cli_path(output)
     effective = resolve_decoy_request(
-        request,
-        request_base=request_path.resolve().parent,
+        document,
+        request_base=request_base,
         overrides=DecoyOverrides(
-            output_fasta=None if output_fasta is None else _cli_path(output_fasta),
-            decoy_prefix=decoy_prefix,
+            output_fasta=output_override,
+            decoy_prefix=None,
         ),
     )
     execution = run_decoy_generation(_cli_path(biological_inventory), effective)
@@ -615,16 +947,72 @@ def decoy(
 
 
 @app.command(name="decoy-report")
-def decoy_report(biological_inventory: Path, request_path: Path) -> None:
-    """Compare requested decoy methods at peptide level.
+def decoy_report(
+    biological_inventory: Path,
+    *,
+    request: Path | None = None,
+    output: Path | None = None,
+    method: tuple[_DecoyCliMethod, ...] = (),
+    prefix: str | None = None,
+    enzyme: str | None = None,
+    minimum: int | None = None,
+    maximum: int | None = None,
+    missed: int | None = None,
+    save: Path | None = None,
+) -> None:
+    """Compare decoy methods from direct arguments or an authored request.
 
     Args:
         biological_inventory: Existing decoy-free protein-inventory Parquet.
-        request_path: Decoy-method comparison request JSON.
+        request: Existing decoy-method comparison request JSON to replay.
+        output: Direct comparison Parquet, or replay output override.
+        method: One or more direct decoy methods.
+        prefix: Direct generated-header prefix.
+        enzyme: Direct collision-digestion enzyme.
+        minimum: Direct minimum peptide length.
+        maximum: Direct maximum peptide length.
+        missed: Direct maximum missed cleavages.
+        save: Optional authored-request destination for a direct run.
     """
+    _reject_replay_options(
+        request,
+        method=method or None,
+        prefix=prefix,
+        enzyme=enzyme,
+        minimum=minimum,
+        maximum=maximum,
+        missed=missed,
+        save=save,
+    )
+    if request is None:
+        _require_direct(output, "output")
+        if not method:
+            raise ValueError("direct mode requires at least one --method")
+        assert output is not None
+        destination = _cli_path(output)
+        request_path = _request_path(destination, save)
+        request_base = request_path.parent
+        document = DecoyReportRequestDocument(
+            output_parquet=_recorded_path(destination, request_base),
+            decoy_prefix="REV_" if prefix is None else prefix,
+            digestion=DigestionDocument(
+                enzyme="trypsin" if enzyme is None else enzyme,
+                min_length=7 if minimum is None else minimum,
+                max_length=50 if maximum is None else maximum,
+                missed_cleavages=0 if missed is None else missed,
+            ),
+            strategies=tuple(_DECOY_STRATEGY_BY_CLI_METHOD[name] for name in method),
+        )
+        _write_authored_request(request_path, document)
+    else:
+        request_path = _cli_path(request)
+        request_base = request_path.parent
+        document = load_decoy_report_request(request_path)
+        if output is not None:
+            document = document.model_copy(update={"output_parquet": _cli_path(output)})
     effective = resolve_decoy_report_request(
-        load_decoy_report_request(request_path),
-        request_base=request_path.resolve().parent,
+        document,
+        request_base=request_base,
     )
     execution = run_decoy_report(_cli_path(biological_inventory), effective)
     logger.info("Wrote decoy-method evidence to {}", execution.result_path)
@@ -633,12 +1021,17 @@ def decoy_report(biological_inventory: Path, request_path: Path) -> None:
 @app.command
 def build(
     protein_input: Path,
-    config: Path,
     *,
+    request: Path | None = None,
+    output: Path | None = None,
+    project: int | None = None,
+    dbn: int | None = None,
+    description: str | None = None,
     profile: Path | None = None,
     date: datetime.date | None = None,
+    save: Path | None = None,
 ) -> None:
-    """Build one reproducible biological FASTA from prepared protein rows.
+    """Build a biological FASTA from direct arguments or an authored request.
 
     Relative request paths resolve beside the request file. Profile defaults are
     overridden by request values and then by explicitly supplied CLI options. The
@@ -648,23 +1041,58 @@ def build(
 
     Args:
         protein_input: Canonical decoy-free protein-input Parquet.
-        config: Per-run database-build request JSON.
+        request: Existing biological-build request JSON to replay.
+        output: Direct build directory, or replay output-directory override.
+        project: Direct project identifier for packaged FGCZ naming.
+        dbn: Direct project database number for packaged FGCZ naming.
+        description: Direct compact database-description token.
         profile: Optional portable defaults JSON; packaged FGCZ defaults are used otherwise.
-        date: Optional build-date override.
+        date: Direct build date; today is used when omitted.
+        save: Optional authored-request destination for a direct run.
     """
-    request = load_database_build_request(config)
+    _reject_replay_options(
+        request,
+        project=project,
+        dbn=dbn,
+        description=description,
+        date=date,
+        save=save,
+    )
+    if request is None:
+        _require_direct(output, "output")
+        _require_direct(project, "project")
+        _require_direct(dbn, "dbn")
+        _require_direct(description, "description")
+        assert output is not None
+        assert project is not None
+        assert dbn is not None
+        assert description is not None
+        request_path = _directory_request_path(output, "build", save)
+        request_base = request_path.parent
+        document = DatabaseBuildRequestDocument(
+            output_dir=_recorded_path(output, request_base),
+            date=datetime.date.today() if date is None else date,
+            name_fields={"project": project, "dbn": dbn, "description": description},
+        )
+        _write_authored_request(request_path, document)
+    else:
+        request_path = _cli_path(request)
+        request_base = request_path.parent
+        document = load_database_build_request(request_path)
+        if output is not None:
+            document = document.model_copy(update={"output_dir": _cli_path(output)})
     if profile is None:
         build_profile = load_builtin_database_build_profile()
-        profile_base = config.parent
+        profile_base = request_base
     else:
         build_profile = load_database_build_profile(profile)
-        profile_base = profile.parent
+        profile_base = _cli_path(profile).parent
     effective = resolve_database_build(
         build_profile,
-        request,
+        document,
         profile_base=profile_base,
-        request_base=config.parent,
-        overrides=DatabaseBuildOverrides(date=date),
+        request_base=request_base,
+        overrides=DatabaseBuildOverrides(date=None),
     )
     execution = run_database_build(_cli_path(protein_input), effective)
     logger.info("Built {} entries -> {}", execution.result.n_total, execution.result.path)
@@ -765,22 +1193,57 @@ def index_inventory(
 def candidate(
     inventory_path: Path,
     registry_path: Path,
-    request_path: Path,
     *,
+    request: Path | None = None,
+    output: Path | None = None,
+    threshold: float | None = None,
+    metric: Literal["target_ids", "target_sequences"] | None = None,
+    limit: int | None = None,
     config: Path | None = None,
+    save: Path | None = None,
 ) -> None:
-    """Compare a biological or search inventory without registering it.
+    """Review a candidate from direct arguments or an authored request.
 
     Args:
         inventory_path: Canonical protein- or search-inventory Parquet.
         registry_path: Existing SQLite or DuckDB registry.
-        request_path: Candidate-review request JSON.
+        request: Existing candidate-review request JSON to replay.
+        output: Direct comparison Parquet, or replay output override.
+        threshold: Direct relationship-overlap threshold.
+        metric: Direct clustering metric.
+        limit: Direct nearest-neighbour limit.
         config: Optional registry-policy JSON matching the indexed registry.
+        save: Optional authored-request destination for a direct run.
     """
-    request = load_candidate_request(request_path)
-    effective = resolve_candidate_request(
+    _reject_replay_options(
         request,
-        request_base=request_path.resolve().parent,
+        threshold=threshold,
+        metric=metric,
+        limit=limit,
+        save=save,
+    )
+    if request is None:
+        _require_direct(output, "output")
+        assert output is not None
+        destination = _cli_path(output)
+        request_path = _request_path(destination, save)
+        request_base = request_path.parent
+        document = CandidateRequestDocument(
+            output_parquet=_recorded_path(destination, request_base),
+            overlap_threshold=0.99 if threshold is None else threshold,
+            clustering_metric="target_ids" if metric is None else metric,
+            neighbour_limit=50 if limit is None else limit,
+        )
+        _write_authored_request(request_path, document)
+    else:
+        request_path = _cli_path(request)
+        request_base = request_path.parent
+        document = load_candidate_request(request_path)
+        if output is not None:
+            document = document.model_copy(update={"output_parquet": _cli_path(output)})
+    effective = resolve_candidate_request(
+        document,
+        request_base=request_base,
     )
     document = load_registry_document(config) if config is not None else RegistryDocument()
     execution = run_candidate_analysis(

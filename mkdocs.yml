@@ -15,8 +15,7 @@ nav:
   - Artifacts: artifacts.md
   - API: api.md
   - Rules and detection: configuration.md
-  - CLI: cli.md
-  - CLI walkthrough: cli_walkthrough.md
+  - CLI and walkthrough: cli_walkthrough.md
   - Architecture: architecture.md
   - Benchmarks: benchmarks.md
 

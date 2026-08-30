@@ -13,6 +13,18 @@ pip install 'protein-fasta[generation]'
 pip install 'protein-fasta[cli]'
 ```
 
+## Python and command-line entry points
+
+The package intentionally has no top-level re-export facade. Programmatic callers import the
+smallest workflow or computation from its owning module, as in the examples below. The separate
+installed command-line entry point is `protein-fasta = protein_fasta.cli:main`; its workflow names
+are Cyclopts subcommands rather than additional console scripts.
+
+Request-driven commands accept concise direct arguments for a first run. The CLI validates and
+writes the corresponding passive request document before calling the same resolver and runner as a
+Python caller. `--request PATH` explicitly replays a saved document, and `--output` may redirect
+the replayed products. Python callers construct or load the request document explicitly.
+
 ## Records and lexical I/O
 
 ```python
@@ -138,7 +150,9 @@ search = run_decoy_generation(
 
 The execution returns a `SearchDatabase`, search FASTA, search-inventory Parquet, and typed
 effective/result evidence. Reverse, shuffle, and DecoyPYrat are explicit strategy document
-variants compiled once at the workflow boundary.
+variants compiled at the workflow boundary. The current implementation still converts that union
+through the older `DecoyDocument`; `decoy_database` and `decoy_report` duplicate that conversion.
+This is a migration residual, while `DecoyGeneration` remains the runtime behavior contract.
 
 The low-level `build_database()` accepts already-resolved target, contaminant, and optional
 foreign-source entries plus:

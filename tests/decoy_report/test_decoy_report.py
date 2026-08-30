@@ -111,9 +111,40 @@ def test_decoy_report_cli_matches_api(tmp_path: Path) -> None:
         encoding="utf-8",
     )
 
-    cli.decoy_report(inventory, request_path)
+    cli.decoy_report(inventory, request=request_path)
 
     assert (
         read_decoy_report(api.comparison_path).rows()
         == read_decoy_report(tmp_path / "cli.parquet").rows()
     )
+
+
+def test_decoy_report_direct_authors_request_and_replays(tmp_path: Path) -> None:
+    inventory = _inventory(tmp_path / "biological.parquet")
+    output = tmp_path / "direct.parquet"
+
+    cli.decoy_report(
+        inventory,
+        output=output,
+        method=("reverse",),
+        minimum=3,
+        maximum=30,
+        missed=1,
+    )
+
+    request_path = output.with_suffix(".parquet.request.json")
+    assert json.loads(request_path.read_text(encoding="utf-8")) == {
+        "decoy_prefix": "REV_",
+        "digestion": {
+            "enzyme": "trypsin",
+            "max_length": 30,
+            "min_length": 3,
+            "missed_cleavages": 1,
+        },
+        "output_parquet": "direct.parquet",
+        "schema_version": "0.1",
+        "strategies": [{"type": "reverse"}],
+    }
+    replay = tmp_path / "replay.parquet"
+    cli.decoy_report(inventory, request=request_path, output=replay)
+    assert read_decoy_report(output).rows() == read_decoy_report(replay).rows()

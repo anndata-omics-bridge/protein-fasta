@@ -21,6 +21,10 @@ It provides:
 The package deliberately excludes AnnData/MuData persistence, protein inference, application
 installation and authorization, and the site-curated contaminant/QC catalog.
 
+For a first run, use the concise direct CLI. Request-driven commands write validated authored JSON
+before computation; replay that record explicitly with `--request`.
+
 Start with the [build workflows](workflows.md), then continue with the [API reference](api.md),
-[artifact contracts](artifacts.md), [rule configuration](configuration.md), [CLI guide](cli.md),
-[architecture](architecture.md), or [benchmarks](benchmarks.md).
+[artifact contracts](artifacts.md), [rule configuration](configuration.md),
+[CLI guide and executable walkthrough](cli_walkthrough.md), [architecture](architecture.md), or
+[benchmarks](benchmarks.md).

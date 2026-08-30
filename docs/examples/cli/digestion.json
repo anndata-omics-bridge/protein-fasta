@@ -1,0 +1,6 @@
+{
+  "enzyme": "trypsin",
+  "max_length": 50,
+  "min_length": 7,
+  "missed_cleavages": 2
+}

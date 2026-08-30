@@ -32,6 +32,9 @@ flowchart TB
 
 *Figure 1. Acquire or select inputs and prepare one canonical protein source inventory.*
 
+**Run this workflow from the CLI:** [acquire a UniProt source](cli_walkthrough.md#uniprot-catalog-and-acquisition)
+→ [prepare the canonical protein input](cli_walkthrough.md#build-a-database).
+
 The curator selects a UniProt proteome, an uploaded FASTA, or application-curated sources. A
 UniProt download is one acquisition operation: it does not build, add decoys, install, or index.
 `prepare` then normalizes the selected target, contaminant, and optional foreign rows once and
@@ -69,6 +72,11 @@ flowchart TB
 
 *Figure 2. Build biological entries once, then optionally generate and review a search database.*
 
+**Run this workflow from the CLI:** [prepare and build](cli_walkthrough.md#build-a-database) →
+[generate decoys](cli_walkthrough.md#generate-the-search-database) →
+[review the candidate](cli_walkthrough.md#review-a-candidate-without-registering-it) →
+[index the accepted inventory](cli_walkthrough.md#index-a-canonical-inventory-directly).
+
 `protein-fasta build` ends with a decoy-free biological database. `protein-fasta decoy` is the
 subsequent operation and can be rerun with reverse, shuffle, or DecoyPYrat parameters without
 repeating source preparation, contaminants, or entrapment. Candidate review is read-only.
@@ -104,6 +112,11 @@ flowchart TB
 
 *Figure 3. Derive clean biological sources, add entrapment, and only then generate decoys.*
 
+**Run this workflow from the CLI:** [derive clean source rows](cli_walkthrough.md#derive-clean-source-rows-from-a-search-database)
+→ [build the biological database](cli_walkthrough.md#build-a-database) →
+[generate decoys](cli_walkthrough.md#generate-the-search-database) →
+[build peptide artifacts](cli_walkthrough.md#build-canonical-peptide-artifacts).
+
 This is the former `fasta_gen` derived-entrapment use case at its real boundary. The source filter
 keeps only existing target and contaminant proteins, exactly matching the former application
 behavior. A foreign source is filtered the same way and relabeled as foreign input. New
@@ -138,6 +151,9 @@ flowchart TB
 
 *Figure 4. Build canonical peptide artifacts and optionally compare exact peptide populations.*
 
+**Run this workflow from the CLI:** [build canonical peptide artifacts](cli_walkthrough.md#build-canonical-peptide-artifacts)
+→ [compare peptide inventories](cli_walkthrough.md#compare-peptide-inventories).
+
 The peptide workflow preserves protein order, identity, and scientific kind. Memory, SQLite, and
 DuckDB are interchangeable execution behaviors behind one result contract; they do not change
 the peptide or mapping bytes. The canonical handoffs are Parquet. The FASTA is a unique-peptide
@@ -162,6 +178,8 @@ flowchart TB
 
 *Figure 5. Compare selectable decoy methods from the same biological inventory.*
 
+**Run this workflow from the CLI:** [compare decoy methods](cli_walkthrough.md#compare-decoy-methods).
+
 `decoy-report` reuses one biological input and reports the scientific consequences of each
 requested method. It does not publish a search database, mutate a registry, or combine
 entrapment-overlap analysis with decoy comparison.
@@ -180,7 +198,8 @@ entrapment-overlap analysis with decoy comparison.
 5. Result manifests checksum every artifact they own. Multi-file products are staged, published
    together, and committed by publishing the result manifest last.
 6. Every workflow is callable through Python and the CLI. The CLI loads serialized request
-   documents and invokes the same resolver and execution function as a Python caller.
+   documents or constructs and writes the same document for a direct command form, then invokes
+   the same resolver and execution function as a Python caller.
 7. Parquet is the tabular workflow exchange format. JSON serializes parameters and result
    evidence. FASTA is retained where a search engine or protein-source boundary requires it.
 8. Storage documents are passive Pydantic models. Frozen runtime types own computation; Polars
@@ -192,7 +211,7 @@ entrapment-overlap analysis with decoy comparison.
 | --- | --- | --- |
 | `uniprot-catalog` | Synchronize a checksummed local proteome catalog | catalog Parquet + sync evidence |
 | `uniprot-proteomes` | Filter a local catalog without network access | inspection table |
-| `uniprot-download` | Acquire one selected UniProt source | FASTA + acquisition evidence |
+| `uniprot-download` | Acquire one selected UniProt source | authored request when direct + FASTA + acquisition evidence |
 | `prepare` | Normalize ordered FASTA sources and roles | protein-input Parquet |
 | `derive-input` | Filter registered biological/search inventories for a new entrapment build | protein-input Parquet + skipped counts |
 | `build` | Assemble targets, contaminants, and optional entrapment | biological FASTA + protein inventory Parquet |
@@ -225,6 +244,9 @@ flowchart TB
 ```
 
 *Figure 6. Resolve biological-build and decoy parameters independently.*
+
+**Run this workflow from the CLI:** [configure and run the biological build](cli_walkthrough.md#build-a-database)
+→ [configure and run decoy generation](cli_walkthrough.md#generate-the-search-database).
 
 Biological precedence is `packaged policy < explicit policy < run parameters < explicitly
 supplied CLI values`. The effective request is written before sequence work begins. Decoy

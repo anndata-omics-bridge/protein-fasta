@@ -135,12 +135,34 @@ def test_cli_and_api_prepare_equivalent_frames(tmp_path: Path) -> None:
         encoding="utf-8",
     )
 
-    cli.prepare(request_path)
+    cli.prepare(request=request_path)
 
     api_frame = read_protein_input(api_execution.protein_input_path)
     cli_frame = read_protein_input(tmp_path / "cli.parquet")
     assert cli_frame.schema == api_frame.schema
     assert cli_frame.rows() == api_frame.rows()
+
+
+def test_prepare_direct_authors_request_and_replays_with_output_override(tmp_path: Path) -> None:
+    _write_sources(tmp_path)
+    output = tmp_path / "direct.parquet"
+
+    cli.prepare(tmp_path / "targets.fasta", output, id="human")
+
+    request_path = output.with_suffix(".parquet.request.json")
+    assert json.loads(request_path.read_text(encoding="utf-8")) == {
+        "output_parquet": "direct.parquet",
+        "schema_version": "0.1",
+        "sources": [{"path": "targets.fasta", "source_id": "human", "type": "target"}],
+    }
+    replay = tmp_path / "replay.parquet"
+    cli.prepare(request=request_path, output=replay)
+    assert read_protein_input(output).rows() == read_protein_input(replay).rows()
+
+    with pytest.raises(FileExistsError):
+        cli.prepare(tmp_path / "targets.fasta", output, id="human")
+    with pytest.raises(ValueError, match="cannot be combined with --request"):
+        cli.prepare(tmp_path / "targets.fasta", request=request_path, id="human")
 
 
 def _protein(
@@ -256,9 +278,27 @@ def test_cli_and_api_derived_inputs_are_equivalent(tmp_path: Path) -> None:
         encoding="utf-8",
     )
 
-    cli.derive_input(request_path)
+    cli.derive_input(request=request_path)
 
     assert (
         read_protein_input(tmp_path / "cli-derived.parquet").rows()
         == read_protein_input(api_execution.protein_input_path).rows()
     )
+
+
+def test_derive_input_direct_authors_request_and_replays(tmp_path: Path) -> None:
+    source, _ = _write_derived_inventories(tmp_path)
+    output = tmp_path / "direct-derived.parquet"
+
+    cli.derive_input(source, output, id="source-db")
+
+    request_path = output.with_suffix(".parquet.request.json")
+    assert json.loads(request_path.read_text(encoding="utf-8")) == {
+        "output_parquet": "direct-derived.parquet",
+        "schema_version": "0.1",
+        "source_id": "source-db",
+        "source_inventory": "source.search-inventory.parquet",
+    }
+    replay = tmp_path / "replay-derived.parquet"
+    cli.derive_input(request=request_path, output=replay)
+    assert read_protein_input(output).rows() == read_protein_input(replay).rows()

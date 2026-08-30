@@ -100,7 +100,12 @@ result records the provider query, retrieval time, releases, reported counts, ac
 warnings, and exact artifact checksum. Only result-committed checksum-valid snapshots are returned
 by catalog discovery.
 
-UniProt download writes a provider or reconstructed FASTA plus an effective request and result.
+Each direct request-driven CLI operation first writes a validated authored `*.request.json` without
+replacing an existing file. `--request PATH` replays that document and retains it at its original
+location; `--output` can redirect replayed products. Workflows separately write resolved
+`*.effective.json` before computation and observed `*.result.json` after durable publication.
+
+UniProt download writes a provider or reconstructed FASTA plus those request and result artifacts.
 The result records the resolved proteome, resolution method and query, download query, every
 observed release, actual and provider-reported entry counts, checksum, size, and warnings.
 

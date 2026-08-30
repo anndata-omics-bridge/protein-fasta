@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import datetime
 import json
 import subprocess
 import sys
@@ -147,8 +148,17 @@ def test_export_format_diagnostics_writes_one_row_per_builtin_format(tmp_path: P
 
 
 def test_installed_cli_summarizes_record_diagnostics(tmp_path: Path) -> None:
+    documents = Path(__file__).parents[1] / "src" / "protein_fasta" / "documents"
     result = subprocess.run(
-        [_CLI, "diagnostics", str(_write_fasta(tmp_path))],
+        [
+            _CLI,
+            "diagnostics",
+            str(_write_fasta(tmp_path)),
+            "--rules",
+            str(documents / "diagnostics" / "rules.json"),
+            "--classifiers",
+            str(documents / "entry_classifiers" / "rules.json"),
+        ],
         capture_output=True,
         text=True,
         check=False,
@@ -197,7 +207,17 @@ def test_digest_writes_peptides_with_missed_cleavage_evidence(tmp_path: Path) ->
     config.write_text('{"enzyme":"trypsin","min_length":1,"max_length":50,"missed_cleavages":1}')
     output = tmp_path / "peptides.csv"
 
-    digest(fasta, output, config=config)
+    rules = (
+        Path(__file__).parents[1]
+        / "src"
+        / "protein_fasta"
+        / "documents"
+        / "enzymes"
+        / "trypsin"
+        / "rules.json"
+    )
+
+    digest(fasta, output, config=config, rules=rules)
 
     assert pl.read_csv(output).to_dicts() == [
         {"protein_id": "P1", "peptide": "AK", "missed_cleavages": 0},
@@ -279,7 +299,7 @@ def test_build_resolves_profile_request_and_writes_typed_result(tmp_path: Path) 
             }
         )
     )
-    prepare(prepare_config)
+    prepare(request=prepare_config)
     protein_input = tmp_path / "protein-input.parquet"
     config = tmp_path / "build.json"
     config.write_text(
@@ -293,7 +313,7 @@ def test_build_resolves_profile_request_and_writes_typed_result(tmp_path: Path) 
         )
     )
 
-    build(protein_input, config)
+    build(protein_input, request=config)
 
     fasta = tmp_path / "out" / "p1_db2_demo_20260827.fasta"
     effective = fasta.with_suffix(".fasta.effective.json")
@@ -332,3 +352,47 @@ def test_build_resolves_profile_request_and_writes_typed_result(tmp_path: Path) 
     inventory_artifact = payload["protein_inventory"]
     assert inventory_artifact["row_count"] == 2
     assert payload["summary"]["aa_counts"] == {"A": 1, "C": 1, "D": 1}
+
+
+def test_build_direct_authors_request_and_replays_to_another_directory(tmp_path: Path) -> None:
+    target = tmp_path / "target.fasta"
+    target.write_text(">P1 one\nACD\n")
+    protein_input = tmp_path / "protein-input.parquet"
+    prepare(target, protein_input, id="target")
+
+    direct_dir = tmp_path / "direct"
+    build(
+        protein_input,
+        output=direct_dir,
+        project=1,
+        dbn=2,
+        description="demo",
+        date=datetime.date(2026, 8, 30),
+    )
+
+    request_path = direct_dir / "build.request.json"
+    assert json.loads(request_path.read_text(encoding="utf-8")) == {
+        "annotation": "",
+        "date": "2026-08-30",
+        "name_fields": {"dbn": 2, "description": "demo", "project": 1},
+        "output_dir": ".",
+        "schema_version": "0.3",
+    }
+    replay_dir = tmp_path / "replay"
+    build(protein_input, request=request_path, output=replay_dir)
+    assert (replay_dir / "p1_db2_demo_20260830.fasta").is_file()
+
+    saved_dir = tmp_path / "saved-direct"
+    saved_request = tmp_path / "requests" / "saved-build.json"
+    build(
+        protein_input,
+        output=saved_dir,
+        project=1,
+        dbn=3,
+        description="saved",
+        date=datetime.date(2026, 8, 30),
+        save=saved_request,
+    )
+    saved_payload = json.loads(saved_request.read_text(encoding="utf-8"))
+    assert saved_payload["output_dir"] == "../saved-direct"
+    assert (saved_dir / "p1_db3_saved_20260830.fasta").is_file()

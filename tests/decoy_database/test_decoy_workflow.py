@@ -169,9 +169,29 @@ def test_cli_and_api_decoy_produce_identical_search_rows(tmp_path: Path) -> None
         encoding="utf-8",
     )
 
-    cli.decoy(inventory, request_path)
+    cli.decoy(inventory, request=request_path)
 
     api_frame = read_search_inventory(api.search_inventory_path)
     cli_frame = read_search_inventory(tmp_path / "cli.fasta.search-inventory.parquet")
     assert cli_frame.schema == api_frame.schema
     assert cli_frame.rows() == api_frame.rows()
+
+
+def test_decoy_direct_authors_request_and_replays(tmp_path: Path) -> None:
+    inventory = _inventory(tmp_path / "biological.parquet")
+    output = tmp_path / "direct.fasta"
+
+    cli.decoy(inventory, output=output, method="reverse")
+
+    request_path = output.with_suffix(".fasta.request.json")
+    assert json.loads(request_path.read_text(encoding="utf-8")) == {
+        "decoy_prefix": "REV_",
+        "output_fasta": "direct.fasta",
+        "schema_version": "0.1",
+        "strategy": {"type": "reverse"},
+    }
+    replay = tmp_path / "replay.fasta"
+    cli.decoy(inventory, request=request_path, output=replay)
+    assert read_search_inventory(output.with_suffix(".fasta.search-inventory.parquet")).rows() == (
+        read_search_inventory(replay.with_suffix(".fasta.search-inventory.parquet")).rows()
+    )
