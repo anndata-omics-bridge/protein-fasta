@@ -1,4 +1,5 @@
 .venv/
+.DS_Store
 .coverage
 .carpet/
 .pytest_cache/
