@@ -88,7 +88,7 @@ _REPORTED_CONFLICTS = 5
 def _make_entrapment_generation(
     spec: BiologicalEntrapmentDocument,
 ) -> EntrapmentGeneration:
-    """Load the optional entrapment adapter only when a build selects it."""
+    """Compile entrapment behavior only when a build selects it."""
     from protein_fasta.database_compile import make_entrapment_generation
 
     return make_entrapment_generation(spec)

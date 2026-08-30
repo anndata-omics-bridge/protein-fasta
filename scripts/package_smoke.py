@@ -7,7 +7,6 @@ import json
 import pkgutil
 from importlib import resources
 from importlib.resources.abc import Traversable
-from typing import Final
 
 import protein_fasta
 from protein_fasta.documents import (
@@ -17,11 +16,6 @@ from protein_fasta.documents import (
     load_builtin_enzyme_document,
     load_builtin_header_format_catalog,
 )
-
-_OPTIONAL_GENERATION_MODULES: Final = {
-    "protein_fasta.database.decoy_advanced",
-    "protein_fasta.database.entrapment_advanced",
-}
 
 
 def main() -> None:
@@ -33,7 +27,7 @@ def main() -> None:
             prefix="protein_fasta.",
         )
     }
-    for module_name in sorted(discovered - _OPTIONAL_GENERATION_MODULES):
+    for module_name in sorted(discovered):
         importlib.import_module(module_name)
 
     load_builtin_database_build_profile()

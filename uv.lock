@@ -473,14 +473,6 @@ wheels = [
 ]
 
 [[package]]
-name = "fdr-benchmark"
-version = "0.1.0"
-source = { git = "https://gitlab.bfabric.org/bioinformatics/fdr_benchmark.git?rev=bbf582e382833cf8bdc439e69edb287842293b02#bbf582e382833cf8bdc439e69edb287842293b02" }
-dependencies = [
-    { name = "pyteomics" },
-]
-
-[[package]]
 name = "filelock"
 version = "3.32.4"
 source = { registry = "https://pypi.org/simple" }
@@ -944,9 +936,6 @@ duckdb = [
 frame = [
     { name = "polars" },
 ]
-generation = [
-    { name = "fdr-benchmark" },
-]
 uniprot = [
     { name = "httpx" },
     { name = "polars" },
@@ -973,7 +962,6 @@ docs = [
 requires-dist = [
     { name = "cyclopts", marker = "extra == 'cli'", specifier = ">=4.20,<5" },
     { name = "duckdb", marker = "extra == 'duckdb'", specifier = ">=1.4.2,<2" },
-    { name = "fdr-benchmark", marker = "extra == 'generation'", git = "https://gitlab.bfabric.org/bioinformatics/fdr_benchmark.git?rev=bbf582e382833cf8bdc439e69edb287842293b02" },
     { name = "httpx", marker = "extra == 'cli'", specifier = ">=0.28,<1" },
     { name = "httpx", marker = "extra == 'uniprot'", specifier = ">=0.28,<1" },
     { name = "loguru", specifier = ">=0.7,<1" },
@@ -986,7 +974,7 @@ requires-dist = [
     { name = "pydantic", specifier = ">=2.13,<3" },
     { name = "xlsxwriter", marker = "extra == 'cli'", specifier = ">=3.2,<4" },
 ]
-provides-extras = ["cli", "frame", "uniprot", "duckdb", "generation"]
+provides-extras = ["cli", "frame", "uniprot", "duckdb"]
 
 [package.metadata.requires-dev]
 dev = [
@@ -1163,15 +1151,6 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/7e/ab/265f7dc69d28113ebba19092e57b075f41543b2ed048429c5f56e2b88eac/pyright-1.1.411.tar.gz", hash = "sha256:d885a0551f2e763b089a02702174e7f4ba77548cddabc972ab86d1f7f1b0f998", size = 4112861, upload-time = "2026-06-25T02:14:06.37Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/0a/49/385be530a6a5b78d1cbcd5c2e38debc8959a2fc6bdb716f4e581002979fc/pyright-1.1.411-py3-none-any.whl", hash = "sha256:dc7c72a8e2700c55baa127554040e067041ea53ccfd50bf96308cc4291c7d5d9", size = 6181526, upload-time = "2026-06-25T02:14:04.691Z" },
-]
-
-[[package]]
-name = "pyteomics"
-version = "5.0.1"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/f3/b0/0487f50f546bac5c2f88a6259fabef57a0eb51e8098c499bae064e742b58/pyteomics-5.0.1.tar.gz", hash = "sha256:89670f1512caa7fce5a269f3dc8d5b3856ef02f161fd2abc77155adb0bbe4a48", size = 275092, upload-time = "2026-07-22T13:00:14.87Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/a5/33/4efd15ab9c41f20c107eef35aea6c92dedfb1f12003576ea2ec32766fdaf/pyteomics-5.0.1-py3-none-any.whl", hash = "sha256:aaf85b4f3f64ef42b2c051d7d8b67d22c3a276fe029e5d5bbf17f3915a3bd286", size = 262426, upload-time = "2026-07-22T13:00:12.599Z" },
 ]
 
 [[package]]

@@ -6,7 +6,7 @@ The closest `AGENTS.md` wins. Explicit user instructions override this file.
 
 | Task | Command |
 | --- | --- |
-| Synchronize | `uv sync --frozen --group dev --extra cli --extra frame --extra duckdb --extra generation` |
+| Synchronize | `uv sync --frozen --group dev --extra cli --extra frame --extra duckdb` |
 | Format | `.venv/bin/ruff format src tests benchmarks scripts docs_macros.py && .venv/bin/ruff check --fix src tests benchmarks scripts docs_macros.py` |
 | Lint | `.venv/bin/ruff check src tests benchmarks scripts docs_macros.py` |
 | Typecheck | `.venv/bin/pyright` |

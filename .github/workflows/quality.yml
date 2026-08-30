@@ -30,4 +30,4 @@ jobs:
         run: uv sync --frozen --group dev --group docs --extra cli --extra frame --extra duckdb
 
       - name: Run quality gates
-        run: make check-public
+        run: make check

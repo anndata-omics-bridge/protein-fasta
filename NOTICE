@@ -1,0 +1,19 @@
+Protein FASTA
+Copyright 2026 Witold Wolski
+
+This product includes modified source-derived behavior from FDR Benchmark,
+Copyright 2026 Functional Genomics Center Zurich, revision
+bbf582e382833cf8bdc439e69edb287842293b02, under the Apache License 2.0.
+
+FDR Benchmark in turn records the following attributions:
+
+- PGATK, https://github.com/bigbio/pgatk, reviewed revision cdedf9057e7e.
+  Its DecoyPYrat reverse/switch and collision workflow informed the decoy
+  generation implementation.
+- FDRBench, https://github.com/Noble-Lab/FDRBench, reviewed revision
+  5deac96dfa0e. Its entrapment-generation behavior informed the entrapment
+  generation implementation.
+
+The original projects and associated publications retain their respective
+copyrights and attribution. See LICENSES/Apache-2.0.txt for the applicable
+third-party license.

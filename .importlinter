@@ -39,8 +39,9 @@ containers =
     protein_fasta.database
 exhaustive = True
 layers =
-    decoy_advanced | entrapment_advanced
-    decoy | entrapment | metadata | models | naming
+    decoy_generation | entrapment_generation
+    decoy | entrapment
+    collisions | metadata | models | naming
 
 [importlinter:contract:registry-components]
 name = Registry queries depend on independent backend and kind values

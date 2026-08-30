@@ -5,8 +5,6 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-import pytest
-
 from protein_fasta import cli
 from protein_fasta.analytics.hashing import file_checksum, sequence_hash
 from protein_fasta.decoy_report import (
@@ -16,8 +14,6 @@ from protein_fasta.decoy_report import (
 )
 from protein_fasta.inventory import protein_inventory_frame
 from protein_fasta.schema.decoy_report import DecoyReportRequestDocument
-
-pytestmark = pytest.mark.generation
 
 
 def _inventory(path: Path) -> Path:

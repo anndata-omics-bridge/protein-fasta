@@ -9,9 +9,11 @@ operation they need. Creating a `ProteinRecord` never performs database-specific
 pip install protein-fasta
 pip install 'protein-fasta[frame]'
 pip install 'protein-fasta[duckdb]'
-pip install 'protein-fasta[generation]'
 pip install 'protein-fasta[cli]'
 ```
+
+Reverse, shuffle, DecoyPYrat, shuffled-peptide entrapment, and foreign-species
+entrapment are all included in the base installation.
 
 ## Python and command-line entry points
 

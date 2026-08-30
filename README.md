@@ -134,7 +134,7 @@ APIs without owning FASTA, decoy, peptide, UniProt, or registry computation.
 ## Development
 
 ```bash
-uv sync --group dev --extra cli --extra frame --extra duckdb --extra generation
+uv sync --group dev --extra cli --extra frame --extra duckdb
 make check
 make docs
 ```

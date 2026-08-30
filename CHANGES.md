@@ -1,5 +1,13 @@
 # Changes
 
+- 2026-08-31: Internalized the generation-only portion of `fdr_benchmark`: seeded whole-protein
+  shuffle, DecoyPYrat, shuffled-peptide entrapment, foreign-species entrapment, and their
+  collision/digestion helpers. Removed the private Git dependency, optional `generation` extra,
+  and split public quality gate. Existing `protein_fasta` request/result models, FASTA I/O, and
+  CLI remain the sole public boundary; FDP evaluation and FDP tables were deliberately excluded.
+  Added upstream scientific characterization, a reviewed FDRBench reference fixture, and Apache
+  2.0 source attribution in the shipped distribution.
+
 - 2026-08-30: Kept the credential-free public type-check aligned with the 0.3 runtime-module
   locations, so public CI excludes only the two private advanced-generation adapters.
 

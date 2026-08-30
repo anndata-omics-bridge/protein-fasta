@@ -60,7 +60,8 @@ folder rule described below.
 | `database/`, `inventory.py` | Typed biological/search values and canonical Parquet projection |
 | `database/naming.py`, `database/metadata.py` | Database naming and `aa|` metadata construction |
 | `database/decoy.py`, `database/entrapment.py` | Dependency-free decoy and biological-entrapment runtime contracts and evidence |
-| `database/decoy_advanced.py`, `database/entrapment_advanced.py` | Optional `fdr_benchmark` generation implementations |
+| `database/decoy_generation.py`, `database/entrapment_generation.py` | Native shuffled, DecoyPYrat, and entrapment generation |
+| `database/collisions.py` | Collision-safe sequence permutation shared by generation methods |
 | `database_compile.py`, `decoy_compile.py` | Passive build/strategy document compilation |
 | `protein_input.py`, `database_build.py` | Source preparation and biological assembly roots |
 | `decoy_database.py`, `decoy_report.py` | Search-database generation and method diagnostics |
@@ -170,11 +171,11 @@ workflow API or inferring whether a positional string is a request path.
 
 ## Optional dependencies and consumers
 
-- Base: records, lexical I/O, diagnostics, summaries, hashing, and schemas.
+- Base: records, lexical I/O, diagnostics, summaries, hashing, digestion, decoy generation,
+  entrapment generation, and schemas.
 - `frame`: Polars frame products.
 - `uniprot`: HTTP transport for catalog and FASTA acquisition.
 - `duckdb`: DuckDB registry and peptide-execution support.
-- `generation`: decoy/entrapment generation through `fdr_benchmark`.
 - `cli`: Cyclopts, Loguru, Polars/XLSX output, and workflow commands.
 
 The package imports none of `fasta_gen`, Prozor, APB, AnnData, or MuData. Site-specific curated

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Iterable
 from dataclasses import dataclass
 from re import Pattern
 
@@ -57,6 +58,36 @@ def digest_sequence(sequence: str, digestion: Digestion, /) -> tuple[DigestedPep
                 if digestion.min_length <= len(peptide) <= digestion.max_length:
                     peptides.append(DigestedPeptide(peptide, missed_cleavages))
     return tuple(peptides)
+
+
+def digest_segments(sequence: str, digestion: Digestion, /) -> tuple[str, ...]:
+    """Return the complete zero-missed-cleavage partition of a protein."""
+    _require_normalized(sequence)
+    segments: list[str] = []
+    for segment_match in _LETTER_SEGMENT.finditer(sequence):
+        segment = segment_match.group()
+        start = 0
+        for cleavage_match in digestion.cleavage.finditer(segment):
+            end = cleavage_match.end()
+            segments.append(segment[start:end])
+            start = end
+        if start < len(segment):
+            segments.append(segment[start:])
+    return tuple(segments)
+
+
+def peptide_universe(sequences: Iterable[str], digestion: Digestion, /) -> frozenset[str]:
+    """Return every selected peptide from normalized protein sequences."""
+    return frozenset(
+        peptide.sequence
+        for sequence in sequences
+        for peptide in digest_sequence(sequence, digestion)
+    )
+
+
+def is_selected_peptide(peptide: str, digestion: Digestion, /) -> bool:
+    """Return whether a peptide participates in the configured collision universe."""
+    return digestion.min_length <= len(peptide) <= digestion.max_length
 
 
 def _require_normalized(sequence: str) -> None:
