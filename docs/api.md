@@ -48,6 +48,26 @@ and illegal-residue evidence. `summarize_protein_diagnostics(records)` aggregate
 
 ## Polars tables
 
+The application-level database operation exposes its parsing choice without exposing catalog or
+compiler machinery:
+
+```python
+from pathlib import Path
+
+from protein_fasta.frame import ProteinDatabase, refseq, uniprotkb
+
+protein_database = ProteinDatabase(uniprotkb, refseq)
+proteins = protein_database.parse(
+    (Path("human.fasta"), Path("contaminants.fasta")),
+)
+```
+
+`ProteinDatabase(*formats)` requires at least one unique public format profile. `parse(paths)` reads
+each source with the compiled row-wise runtime, preserves caller path and record order, and returns
+one Polars frame with the configured fields plus `fasta_source_path`,
+`fasta_source_checksum`, `fasta_source_ordinal`, and `fasta_record_ordinal`. An empty path tuple
+returns the complete configured schema with zero rows.
+
 | Function | Meaning |
 | --- | --- |
 | `read_basic_protein_frame(path)` | Exact `id`, `description`, `sequence` schema |

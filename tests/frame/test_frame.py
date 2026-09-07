@@ -7,17 +7,22 @@ from pathlib import Path
 import polars as pl
 import pytest
 
+from protein_fasta.analytics.hashing import file_checksum
 from protein_fasta.documents import (
     load_builtin_entry_classifier_document,
     load_builtin_header_format_catalog,
 )
 from protein_fasta.frame import (
+    ProteinDatabase,
+    ProteinFormat,
     read_basic_protein_frame,
     read_configured_protein_frame,
     read_header_format_diagnostics_frame,
     read_protein_frame,
     read_strict_configured_protein_frame,
     read_strict_protein_frame,
+    refseq,
+    uniprotkb,
 )
 from protein_fasta.frame_formats.extraction import FrameExtractionError
 from protein_fasta.schema.diagnostics import (
@@ -283,3 +288,66 @@ def test_selected_format_raises_when_required_extraction_is_missing(tmp_path: Pa
             HeaderFormatCatalogDocument(formats=(broken,)),
             load_builtin_entry_classifier_document(),
         )
+
+
+def test_protein_database_combines_sources_with_stable_provenance(tmp_path: Path) -> None:
+    human = tmp_path / "human.fasta"
+    human.write_text(
+        ">sp|P12345|RL40_YEAST Protein OS=Yeast OX=1 PE=1 SV=1\nAA\n",
+        encoding="utf-8",
+    )
+    contaminants = tmp_path / "contaminants.fasta"
+    contaminants.write_text(
+        ">ref|NP_123456.1| ATP synthase subunit [Homo sapiens]\nBB\n",
+        encoding="utf-8",
+    )
+
+    proteins = ProteinDatabase(uniprotkb, refseq).parse((human, contaminants))
+
+    assert proteins["id"].to_list() == [
+        "sp|P12345|RL40_YEAST",
+        "ref|NP_123456.1|",
+    ]
+    assert proteins["database"].to_list() == ["uniprotkb", "refseq"]
+    assert proteins["fasta_source_path"].to_list() == [str(human), str(contaminants)]
+    assert proteins["fasta_source_checksum"].to_list() == [
+        file_checksum(human),
+        file_checksum(contaminants),
+    ]
+    assert proteins["fasta_source_ordinal"].to_list() == [0, 1]
+    assert proteins["fasta_record_ordinal"].to_list() == [0, 0]
+
+
+def test_protein_database_empty_parse_has_configured_schema() -> None:
+    proteins = ProteinDatabase(uniprotkb, refseq).parse(())
+
+    assert proteins.is_empty()
+    assert proteins.columns[:5] == [
+        "id",
+        "description",
+        "sequence",
+        "is_decoy",
+        "is_contaminant",
+    ]
+    assert proteins.columns[-4:] == [
+        "fasta_source_path",
+        "fasta_source_checksum",
+        "fasta_source_ordinal",
+        "fasta_record_ordinal",
+    ]
+
+
+@pytest.mark.parametrize(
+    ("formats", "message"),
+    [
+        ((), "at least one"),
+        ((uniprotkb, uniprotkb), "must be unique"),
+        ((ProteinFormat("missing"),), "unknown packaged protein format"),
+    ],
+)
+def test_protein_database_rejects_invalid_formats(
+    formats: tuple[ProteinFormat, ...],
+    message: str,
+) -> None:
+    with pytest.raises(ValueError, match=message):
+        ProteinDatabase(*formats)

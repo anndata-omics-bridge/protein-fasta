@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
 
 import polars as pl
 
+from protein_fasta.analytics.hashing import file_checksum
 from protein_fasta.documents import (
     load_builtin_entry_classifier_document,
     load_builtin_header_format_catalog,
@@ -34,6 +36,95 @@ from protein_fasta.validation.sequence import normalize_sequence
 _RAW_HEADER = "__raw_header"
 _ROW_INDEX = "__row_index"
 _BASE_COLUMNS = ("id", "description", "sequence")
+_PROVENANCE_SCHEMA: dict[str, type[pl.DataType]] = {
+    "fasta_source_path": pl.String,
+    "fasta_source_checksum": pl.String,
+    "fasta_source_ordinal": pl.UInt32,
+    "fasta_record_ordinal": pl.UInt64,
+}
+_COLUMN_TYPES: dict[str, type[pl.DataType]] = {
+    "string": pl.String,
+    "integer": pl.Int64,
+    "number": pl.Float64,
+    "boolean": pl.Boolean,
+}
+
+
+@dataclass(frozen=True, slots=True)
+class ProteinFormat:
+    """A packaged FASTA header format selectable by callers."""
+
+    name: str
+
+
+uniprotkb = ProteinFormat("uniprotkb")
+"""The packaged UniProtKB header format."""
+
+refseq = ProteinFormat("refseq")
+"""The packaged RefSeq header format."""
+
+
+class ProteinDatabase:
+    """Parse ordered FASTA sources into one configured Polars frame."""
+
+    def __init__(self, *formats: ProteinFormat) -> None:
+        """Configure how FASTA headers become protein-frame columns.
+
+        Args:
+            *formats: Packaged FASTA formats in recognition and output order.
+
+        Raises:
+            ValueError: No formats were supplied, a format is duplicated, or a format is unknown.
+        """
+        if not formats:
+            raise ValueError("ProteinDatabase requires at least one protein format")
+        names = tuple(format_.name for format_ in formats)
+        if len(names) != len(set(names)):
+            raise ValueError("ProteinDatabase formats must be unique")
+        available = {
+            document.format: document for document in load_builtin_header_format_catalog().formats
+        }
+        unknown = tuple(name for name in names if name not in available)
+        if unknown:
+            rendered = ", ".join(repr(name) for name in unknown)
+            raise ValueError(f"unknown packaged protein format: {rendered}")
+        catalog = HeaderFormatCatalogDocument(
+            formats=tuple(available[name] for name in names),
+        )
+        self._parsers = make_frame_parsers(catalog)
+        self._classifiers = make_frame_classifiers(
+            load_builtin_entry_classifier_document(),
+        )
+        _validate_output_names(self._parsers, self._classifiers)
+        self._schema = _database_schema(self._parsers, self._classifiers)
+
+    def parse(self, paths: tuple[Path, ...], /) -> pl.DataFrame:
+        """Return one source-aware frame for the supplied FASTA paths."""
+        frames = tuple(
+            self._parse_source(path, source_ordinal) for source_ordinal, path in enumerate(paths)
+        )
+        if not frames:
+            return pl.DataFrame(schema=self._schema)
+        return pl.concat(frames, how="vertical")
+
+    def _parse_source(self, path: Path, source_ordinal: int) -> pl.DataFrame:
+        frame = _read_with_runtime(path, self._parsers, self._classifiers)
+        missing = tuple(name for name in self._schema if name not in frame.columns)
+        if missing:
+            frame = with_columns(
+                frame,
+                [pl.lit(None, dtype=self._schema[name]).alias(name) for name in missing],
+            )
+        frame = select_columns(frame, tuple(self._schema)[:-4])
+        return with_columns(
+            frame,
+            [
+                pl.lit(str(path), dtype=pl.String).alias("fasta_source_path"),
+                pl.lit(file_checksum(path), dtype=pl.String).alias("fasta_source_checksum"),
+                pl.lit(source_ordinal, dtype=pl.UInt32).alias("fasta_source_ordinal"),
+                pl.int_range(0, frame.height, dtype=pl.UInt64).alias("fasta_record_ordinal"),
+            ],
+        )
 
 
 def read_basic_protein_frame(path: Path, /) -> pl.DataFrame:
@@ -199,6 +290,23 @@ def _parser_output_columns(
             if column.name not in names:
                 names.append(column.name)
     return tuple(names)
+
+
+def _database_schema(
+    parsers: tuple[CompiledFrameParser, ...],
+    classifiers: CompiledFrameClassifiers,
+) -> dict[str, type[pl.DataType]]:
+    schema: dict[str, type[pl.DataType]] = {
+        "id": pl.String,
+        "description": pl.String,
+        "sequence": pl.String,
+    }
+    schema.update(dict.fromkeys(classifiers.output_columns, pl.Boolean))
+    for parser in parsers:
+        for column in parser.columns:
+            schema[column.name] = _COLUMN_TYPES[column.column_type]
+    schema.update(_PROVENANCE_SCHEMA)
+    return schema
 
 
 def _read_internal_frame(path: Path) -> pl.DataFrame:

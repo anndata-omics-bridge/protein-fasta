@@ -12,6 +12,8 @@
 - SQLite or optional DuckDB indexing with materialized pair metrics; and
 - a short, single-word Cyclopts command surface for each reproducible operation.
 
+**[Online documentation](https://anndata-omics-bridge.github.io/protein-fasta/)**
+
 The stable high-level Python record is exactly `id`, optional `description`, and normalized
 `sequence`:
 
@@ -68,7 +70,26 @@ print(summary.namespace_counts, summary.classification_counts)
 
 ## Polars frames
 
-Install `protein-fasta[frame]`, then choose the exact base table or automatic row-wise enrichment:
+Install `protein-fasta[frame]`. Applications that need one configured database frame select the
+accepted public formats when constructing `ProteinDatabase`, then supply the ordered FASTA paths to
+`parse()`:
+
+```python
+from pathlib import Path
+
+from protein_fasta.frame import ProteinDatabase, refseq, uniprotkb
+
+protein_database = ProteinDatabase(uniprotkb, refseq)
+proteins = protein_database.parse(
+    (Path("human.fasta"), Path("contaminants.fasta")),
+)
+```
+
+The result is one row-wise enriched Polars frame. It includes `id`, `description`, `sequence`, the
+columns selected by the format profiles, classifier columns, and stable path/checksum/source/record
+provenance. Document loading and parser compilation remain private to `protein_fasta`.
+
+Lower-level callers may choose the exact base table or automatic row-wise enrichment:
 
 ```python
 from pathlib import Path

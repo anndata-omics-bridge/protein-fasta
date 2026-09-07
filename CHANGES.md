@@ -1,5 +1,10 @@
 # Changes
 
+- 2026-09-03: Added the application-level `ProteinDatabase(uniprotkb, refseq)` API. Construction
+  selects public FASTA format profiles while keeping built-in document loading and compilation
+  internal; `parse(paths)` returns one configured row-wise Polars frame with stable source paths,
+  checksums, source ordinals, and record ordinals.
+
 - 2026-08-31: Internalized the generation-only portion of `fdr_benchmark`: seeded whole-protein
   shuffle, DecoyPYrat, shuffled-peptide entrapment, foreign-species entrapment, and their
   collision/digestion helpers. Removed the private Git dependency, optional `generation` extra,
