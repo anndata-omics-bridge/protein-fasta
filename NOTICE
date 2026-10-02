@@ -17,3 +17,17 @@ FDR Benchmark in turn records the following attributions:
 The original projects and associated publications retain their respective
 copyrights and attribution. See LICENSES/Apache-2.0.txt for the applicable
 third-party license.
+
+The dipeptide instability weight values in
+src/protein_fasta/analytics/peptide_properties.py are taken from Biopython
+1.86, Bio/SeqUtils/ProtParamData.py, Copyright (c) 1999-2024 The Biopython
+Contributors, under the BSD 3-Clause License (two entries changed to the
+values of the R package Peptides). See LICENSES/BSD-3-Clause-Biopython.txt.
+
+The reversed-phase retention coefficients and length-corrected retention
+model in the same file are taken from Pyteomics 4.7.5, pyteomics/achrom.py
+(RCs_zubarev, calculate_RT), under the Apache License 2.0; see
+LICENSES/Apache-2.0.txt. Pyteomics: Goloborodko et al., J Am Soc Mass Spectrom
+2013, 24(2):301-304; Levitsky et al., J Proteome Res 2019, 18(2):709-714. The
+coefficients: Goloborodko et al., Rapid Commun Mass Spectrom 2010,
+24(4):454-462.

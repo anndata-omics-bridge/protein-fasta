@@ -102,6 +102,35 @@ Digestion documents select a packaged enzyme rule and peptide-length/missed-clea
 `digest_sequence()` requires an already-normalized sequence and returns peptide text with its
 missed-cleavage count.
 
+## Peptide properties
+
+```python
+from protein_fasta.peptide_frame import peptide_property_frame
+
+properties = peptide_property_frame(["KQPWWR", "EAAAMGPTK"])
+```
+
+`peptide_property_frame(sequences)` requires the `frame` extra and returns one row per supplied sequence, in order and with duplicates, holding `sequence` plus the fields below. The backend-free `protein_fasta.analytics.peptide_properties.peptide_properties(sequence)` returns the same values for one sequence as a `PeptideProperties` record.
+
+| Column | Type | Definition |
+| --- | --- | --- |
+| `length` | Int64 | Residues |
+| `molecular_weight` | Float64 | Average mass in Da |
+| `isoelectric_point` | Float64 | pH of zero net charge, EMBOSS pK scale |
+| `hydrophobicity` | Float64 | Mean Kyte-Doolittle hydropathy (GRAVY) |
+| `instability_index` | Float64 | Guruprasad dipeptide instability index |
+| `boman_index` | Float64 | Boman protein-binding potential index |
+| `charge` | Float64 | Net charge at pH 7, Sillero pK scale |
+| `predicted_retention_time` | Float64 | Reversed-phase retention in minutes, length-corrected additive model of Goloborodko et al. (2010) |
+| `missed_cleavages` | Int64 | Internal K or R not followed by P |
+| `proline_count` | Int64 | Prolines |
+| `c_terminal_residue` | String | Last residue |
+| `contains_cysteine`, `contains_methionine`, `contains_tryptophan` | Boolean | C, M, or W present |
+| `n_terminal_glutamine_or_glutamate`, `n_terminal_cysteine` | Boolean | First residue Q/E (pyro-Glu) or C |
+| `contains_ng_motif`, `contains_dp_motif` | Boolean | NG (deamidation) or DP (acid-labile) present |
+
+The physicochemical values reproduce the defaults of the R package Peptides. `predicted_retention_time` reproduces Pyteomics `achrom.calculate_RT(sequence, achrom.RCs_zubarev)`: residue retention coefficients from a nano-LC C18 column with acetic acid and carbamidomethylated Cys, multiplied by `1 - 0.21 ln(length)`, plus 0.53. It orders peptides by expected elution; its minutes belong to that reference gradient, not to another LC setup. Sequences must be stripped, non-empty, upper-case letters; anything else raises `ValueError`. A sequence containing a residue outside the 20 standard amino acids, such as selenocysteine `U`, has null properties rather than values computed with that residue left out.
+
 ## Protein input and biological database construction
 
 Source selection and database assembly are separate APIs. Preparation turns ordered target,

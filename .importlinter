@@ -15,7 +15,7 @@ layers =
     database_compile | decoy_compile | registry_workflow
     peptide
     registry
-    inventory | record | frame | summary | artifact_io | uniprot
+    inventory | record | frame | peptide_frame | summary | artifact_io | uniprot
     database
     analytics_compile
     compile | frame_compile | documents

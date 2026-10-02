@@ -1,5 +1,7 @@
 # Changes
 
+- 2026-10-02: Added `peptide_property_frame(sequences)` (`protein_fasta.peptide_frame`, `frame` extra): one Polars row per peptide with length, average molecular weight, isoelectric point, Kyte-Doolittle hydrophobicity, instability and Boman indices, charge at pH 7, predicted reversed-phase retention time, missed cleavages, proline count, C-terminal residue, and Cys/Met/Trp, N-terminal Q/E or Cys, NG and DP flags. The backend-free `analytics.peptide_properties.peptide_properties(sequence)` computes one row. Physicochemical values reproduce the R package Peptides defaults; the retention time reproduces Pyteomics `achrom.calculate_RT` with the Goloborodko et al. (2010) C18 coefficients. A sequence with a residue outside the 20 standard amino acids, such as selenocysteine `U`, gets null properties.
+
 - 2026-09-03: Added the application-level `ProteinDatabase(uniprotkb, refseq)` API. Construction
   selects public FASTA format profiles while keeping built-in document loading and compilation
   internal; `parse(paths)` returns one configured row-wise Polars frame with stable source paths,
