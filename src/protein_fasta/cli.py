@@ -68,6 +68,8 @@ from protein_fasta.documents import (
     load_uniprot_download_request,
 )
 from protein_fasta.frame import (
+    ProteinDatabase,
+    ProteinFormat,
     read_basic_protein_frame,
     read_configured_protein_frame,
     read_header_format_diagnostics_frame,
@@ -377,6 +379,31 @@ def configured(
         load_entry_classifier_document(classifiers),
     )
     _export_frame(frame, table_path, exclude_sequence=not sequence)
+
+
+@app.command
+def database(
+    parquet_path: Path,
+    *fasta_paths: Path,
+    formats: tuple[str, ...] = ("uniprotkb", "refseq"),
+) -> None:
+    """Parse FASTA files once into a Parquet protein database.
+
+    Tools that take a ``ProteinDatabase`` FASTA input, such as apb-fasta and apb-proteobench,
+    read this file in its place when they use the same formats; any other format or classifier
+    configuration refuses it.
+
+    Args:
+        parquet_path: Output path ending in ``.parquet``.
+        fasta_paths: Plain, gzip, or bzip2 protein FASTA inputs.
+        formats: Packaged header formats in recognition order.
+    """
+    ProteinDatabase(*(ProteinFormat(name) for name in formats)).write_parquet(
+        fasta_paths, parquet_path
+    )
+    logger.info(
+        "Wrote the protein database of {} to {}", ", ".join(map(str, fasta_paths)), parquet_path
+    )
 
 
 @app.command

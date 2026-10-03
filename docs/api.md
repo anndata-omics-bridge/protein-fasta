@@ -68,6 +68,8 @@ one Polars frame with the configured fields plus `fasta_source_path`,
 `fasta_source_checksum`, `fasta_source_ordinal`, and `fasta_record_ordinal`. An empty path tuple
 returns the complete configured schema with zero rows.
 
+`write_parquet(paths, target)` parses once and stores that frame; `parse((target,))` reads it back instead of the FASTA files. The file records the format and classifier versions it was built with, and `parse` refuses it under any other configuration, or when mixed with other paths. The `database` command writes the same file.
+
 | Function | Meaning |
 | --- | --- |
 | `read_basic_protein_frame(path)` | Exact `id`, `description`, `sequence` schema |

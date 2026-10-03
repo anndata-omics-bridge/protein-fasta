@@ -25,11 +25,14 @@ from protein_fasta.frame import (
     uniprotkb,
 )
 from protein_fasta.frame_formats.extraction import FrameExtractionError
+from protein_fasta.reading.header import parse_header
+from protein_fasta.reading.parser import FastaReadError, read_records
 from protein_fasta.schema.diagnostics import (
     EntryClassifierCatalogDocument,
     EntryClassifierDocument,
 )
 from protein_fasta.schema.frame_formats import HeaderFormatCatalogDocument
+from protein_fasta.validation.sequence import normalize_sequence
 
 
 def _write_fasta(tmp_path: Path, text: str) -> Path:
@@ -52,6 +55,28 @@ def test_basic_frame_has_exact_stable_schema_and_normalized_values(tmp_path: Pat
         {"id": "P1", "description": "description here", "sequence": "ACD"},
         {"id": "P2", "description": None, "sequence": "EF"},
     ]
+
+
+def test_basic_frame_matches_the_record_reader(tmp_path: Path) -> None:
+    text = "\n \r\n>P1  a\tb \r\nac\r\n\r\nd e*\n>\n>P3\n  >x\n>>P4 only\n>P5\nAA**"
+    path = _write_fasta(tmp_path, text)
+    expected = [
+        {
+            "id": parse_header(record.raw_header).id,
+            "description": parse_header(record.raw_header).description,
+            "sequence": normalize_sequence(record.sequence).sequence,
+        }
+        for record in read_records(path)
+    ]
+
+    assert read_basic_protein_frame(path).to_dicts() == expected
+
+
+def test_basic_frame_rejects_sequence_before_the_first_header(tmp_path: Path) -> None:
+    path = _write_fasta(tmp_path, "\n  \n >P1\nAA\n")
+
+    with pytest.raises(FastaReadError, match="before the first FASTA header at line 3"):
+        read_basic_protein_frame(path)
 
 
 def test_empty_frame_has_exact_base_schema(tmp_path: Path) -> None:
@@ -82,6 +107,7 @@ def test_uniprot_frame_peels_decorations_and_extracts_best_columns(tmp_path: Pat
         "sequence",
         "is_decoy",
         "is_contaminant",
+        "is_entrapment",
         "database",
         "review_status",
         "accession",
@@ -337,6 +363,30 @@ def test_protein_database_combines_sources_with_stable_provenance(tmp_path: Path
     ]
     assert proteins["fasta_source_ordinal"].to_list() == [0, 1]
     assert proteins["fasta_record_ordinal"].to_list() == [0, 0]
+
+
+def test_protein_database_flags_proteobench_entrapment_entries(tmp_path: Path) -> None:
+    path = _write_fasta(
+        tmp_path, ">sp|PEPK_target|PEPK_target\nPEPK\n>sp|EPPK_p_target|EPPK_p_target\nEPPK\n"
+    )
+
+    proteins = ProteinDatabase(uniprotkb).parse((path,))
+
+    assert proteins["is_entrapment"].to_list() == [False, True]
+
+
+def test_protein_database_reads_back_its_parquet(tmp_path: Path) -> None:
+    fasta = _write_fasta(tmp_path, ">sp|P12345|RL40_YEAST Protein OS=Yeast OX=1\nAA\n")
+    parquet = tmp_path / "proteins.parquet"
+    database = ProteinDatabase(uniprotkb, refseq)
+
+    database.write_parquet((fasta,), parquet)
+
+    assert database.parse((parquet,)).equals(database.parse((fasta,)))
+    with pytest.raises(ValueError, match="pass it alone"):
+        database.parse((parquet, fasta))
+    with pytest.raises(ValueError, match="not written under this protein database configuration"):
+        ProteinDatabase(uniprotkb).parse((parquet,))
 
 
 def test_protein_database_empty_parse_has_configured_schema() -> None:

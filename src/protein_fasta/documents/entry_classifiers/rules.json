@@ -1,6 +1,6 @@
 {
   "schema_version": "0.1",
-  "file_version": "3",
+  "file_version": "4",
   "classifiers": [
     {
       "name": "decoy",
@@ -23,6 +23,15 @@
         "^CONTAMINANT_",
         "^(?P<keep>(?:sp|tr)\\|)Cont_"
       ],
+      "removable_suffix_patterns": []
+    },
+    {
+      "name": "entrapment",
+      "output_column": "is_entrapment",
+      "match_patterns": [
+        "^sp\\|[^|]+_p_target\\|"
+      ],
+      "removable_prefix_patterns": [],
       "removable_suffix_patterns": []
     }
   ]

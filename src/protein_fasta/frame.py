@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -27,13 +28,12 @@ from protein_fasta.frame_formats.runtime import (
     sort_rows,
     with_columns,
 )
-from protein_fasta.reading.header import parse_header
-from protein_fasta.reading.parser import read_records
+from protein_fasta.reading.parser import FastaReadError, read_text
 from protein_fasta.schema.diagnostics import EntryClassifierCatalogDocument
 from protein_fasta.schema.frame_formats import HeaderFormatCatalogDocument
-from protein_fasta.validation.sequence import normalize_sequence
 
 _RAW_HEADER = "__raw_header"
+_CONFIGURATION_KEY = "protein_fasta.database"
 _ROW_INDEX = "__row_index"
 _BASE_COLUMNS = ("id", "description", "sequence")
 _PROVENANCE_SCHEMA: dict[str, type[pl.DataType]] = {
@@ -91,21 +91,54 @@ class ProteinDatabase:
         catalog = HeaderFormatCatalogDocument(
             formats=tuple(available[name] for name in names),
         )
+        classifier_document = load_builtin_entry_classifier_document()
         self._parsers = make_frame_parsers(catalog)
-        self._classifiers = make_frame_classifiers(
-            load_builtin_entry_classifier_document(),
-        )
+        self._classifiers = make_frame_classifiers(classifier_document)
         _validate_output_names(self._parsers, self._classifiers)
         self._schema = _database_schema(self._parsers, self._classifiers)
+        self._configuration = json.dumps(
+            {
+                "formats": {name: available[name].file_version for name in names},
+                "entry_classifiers": classifier_document.file_version,
+            }
+        )
 
     def parse(self, paths: tuple[Path, ...], /) -> pl.DataFrame:
-        """Return one source-aware frame for the supplied FASTA paths."""
+        """Return one source-aware frame for FASTA paths, or the Parquet file `write_parquet` made.
+
+        Raises:
+            ValueError: A Parquet path is mixed with other paths, or it was written under another
+                format or classifier configuration.
+        """
+        if any(path.suffix == ".parquet" for path in paths):
+            return self._read_parquet(paths)
         frames = tuple(
             self._parse_source(path, source_ordinal) for source_ordinal, path in enumerate(paths)
         )
         if not frames:
             return pl.DataFrame(schema=self._schema)
         return pl.concat(frames, how="vertical")
+
+    def write_parquet(self, paths: tuple[Path, ...], target: Path, /) -> None:
+        """Parse FASTA paths once and store the frame for later `parse` calls.
+
+        The file records this database's format and classifier versions, so `parse` refuses it
+        under any other configuration instead of returning stale classifications.
+        """
+        self.parse(paths).write_parquet(target, metadata={_CONFIGURATION_KEY: self._configuration})
+
+    def _read_parquet(self, paths: tuple[Path, ...]) -> pl.DataFrame:
+        if len(paths) != 1:
+            raise ValueError(
+                "a protein-database Parquet file replaces its FASTA files; pass it alone"
+            )
+        (path,) = paths
+        if pl.read_parquet_metadata(path).get(_CONFIGURATION_KEY) != self._configuration:
+            raise ValueError(
+                f"{path} was not written under this protein database configuration; "
+                "rebuild it with protein-fasta database"
+            )
+        return pl.read_parquet(path)
 
     def _parse_source(self, path: Path, source_ordinal: int) -> pl.DataFrame:
         frame = _read_with_runtime(path, self._parsers, self._classifiers)
@@ -310,31 +343,36 @@ def _database_schema(
 
 
 def _read_internal_frame(path: Path) -> pl.DataFrame:
-    raw_headers: list[str] = []
-    identifiers: list[str] = []
-    descriptions: list[str | None] = []
-    sequences: list[str] = []
-    for lexical in read_records(path):
-        parsed = parse_header(lexical.raw_header)
-        normalized = normalize_sequence(lexical.sequence)
-        raw_headers.append(lexical.raw_header)
-        identifiers.append(parsed.id)
-        descriptions.append(parsed.description)
-        sequences.append(normalized.sequence)
-    return pl.DataFrame(
-        {
-            _RAW_HEADER: raw_headers,
-            "id": identifiers,
-            "description": descriptions,
-            "sequence": sequences,
-        },
-        schema={
-            _RAW_HEADER: pl.String,
-            "id": pl.String,
-            "description": pl.String,
-            "sequence": pl.String,
-        },
+    # Columnar equivalent of read_records + parse_header + normalize_sequence.
+    text = read_text(path)
+    first = len(text) - len(text.lstrip())
+    line_start = text.rfind("\n", 0, first) + 1
+    if first < len(text) and text[line_start] != ">":
+        raise FastaReadError(
+            str(path),
+            "sequence content before the first FASTA header",
+            line_number=text.count("\n", 0, first) + 1,
+        )
+    records = text[line_start + 1 :].split("\n>") if first < len(text) else []
+    raw_header = pl.col("record").str.extract(r"^([^\n]*)")
+    header = raw_header.str.replace(r"^>", "")
+    frame = with_columns(
+        pl.DataFrame({"record": records}, schema={"record": pl.String}),
+        [
+            raw_header.alias(_RAW_HEADER),
+            header.str.extract(r"^\s*(\S+)").fill_null("").alias("id"),
+            header.str.extract(r"^\s*\S+\s+(\S.*?)\s*$")
+            .str.replace_all(r"\s+", " ")
+            .alias("description"),
+            pl.col("record")
+            .str.replace(r"^[^\n]*", "")
+            .str.replace_all(r"\s", "")
+            .str.to_uppercase()
+            .str.replace(r"\*$", "")
+            .alias("sequence"),
+        ],
     )
+    return select_columns(frame, (_RAW_HEADER, *_BASE_COLUMNS))
 
 
 def _validate_output_names(

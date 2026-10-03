@@ -30,8 +30,8 @@ The packaged diagnostics recognize UniProt, bare UniProt accessions, PDB, RefSeq
 Ensembl, and neXtProt identifier shapes. The packaged classifier document contains only broadly
 used decoy prefixes (`REV_`, `DECOY_`, `reverse_`) and contaminant prefixes (`CON__`, `CON_`,
 `CONTAMINANT_`), plus the contaminant accession marker in `sp|Cont_` / `tr|Cont_`, peeled so the
-accession of `sp|Cont_P00722|BGAL_ECOLI` is `P00722`. Other application conventions do not belong here:
-for example, fasta_gen owns its `aa|`, `zh|C...`, and `_p_target` rules in its own JSON document.
+accession of `sp|Cont_P00722|BGAL_ECOLI` is `P00722`, and ProteoBench's entrapment marker: `is_entrapment` flags `sp|<peptide>_p_target|…` entries. Other application conventions do not belong here:
+for example, fasta_gen owns its `aa|` and `zh|C...` rules in its own JSON document.
 
 Use the packaged documents by omitting options, or consume explicit diagnostic and classifier JSON
 beside the command that uses them:

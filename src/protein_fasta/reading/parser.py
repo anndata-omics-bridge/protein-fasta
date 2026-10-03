@@ -81,6 +81,17 @@ def read_records(path: Path) -> Iterator[FastaRecord]:
         raise FastaReadError(str(path), f"file cannot be read as FASTA ({error})") from error
 
 
+def read_text(path: Path) -> str:
+    """Read a plain, gzip, or bzip2 path as one text with normalized line endings."""
+    try:
+        with _open_text(path) as handle:
+            return handle.read()
+    except UnicodeDecodeError as error:
+        raise FastaReadError(str(path), f"file is not valid UTF-8 ({error})") from error
+    except (EOFError, OSError) as error:
+        raise FastaReadError(str(path), f"file cannot be read as FASTA ({error})") from error
+
+
 def parse_text(text: str) -> Iterator[FastaRecord]:
     """Parse records from explicit inline FASTA text."""
     yield from parse_records(StringIO(text), source_name="<inline-fasta>")

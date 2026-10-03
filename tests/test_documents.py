@@ -56,7 +56,7 @@ def test_builtin_documents_load_with_stable_versions() -> None:
     assert profile.schema_version == "0.3"
     assert profile.metadata.tool == "protein-fasta"
     assert load_builtin_diagnostic_document().file_version == "1"
-    assert load_builtin_entry_classifier_document().file_version == "3"
+    assert load_builtin_entry_classifier_document().file_version == "4"
 
 
 def test_explicit_loader_names_invalid_source_path(tmp_path: Path) -> None:

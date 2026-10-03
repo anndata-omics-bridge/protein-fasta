@@ -1,5 +1,11 @@
 # Changes
 
+- 2026-10-03: `ProteinDatabase.write_parquet(paths, target)` and the `database` command store a parsed protein frame; `parse((target,))` reads it back instead of the FASTA files, about 70 times faster on ProteoBench's 2.84 M-entry entrapment FASTA. The file records its format and classifier versions, and `parse` refuses it under another configuration.
+
+- 2026-10-03: The built-in classifiers add `is_entrapment`, flagging ProteoBench's `sp|<peptide>_p_target|…` entrapment entries; classifier document version 4.
+
+- 2026-10-03: The frame reader parses records with Polars instead of a per-line Python loop, with identical output; about twice as fast on large FASTAs.
+
 - 2026-10-02: Added `peptide_property_frame(sequences)` (`protein_fasta.peptide_frame`, `frame` extra): one Polars row per peptide with length, average molecular weight, isoelectric point, Kyte-Doolittle hydrophobicity, instability and Boman indices, charge at pH 7, predicted reversed-phase retention time, missed cleavages, proline count, C-terminal residue, and Cys/Met/Trp, N-terminal Q/E or Cys, NG and DP flags. The backend-free `analytics.peptide_properties.peptide_properties(sequence)` computes one row. Physicochemical values reproduce the R package Peptides defaults; the retention time reproduces Pyteomics `achrom.calculate_RT` with the Goloborodko et al. (2010) C18 coefficients. A sequence with a residue outside the 20 standard amino acids, such as selenocysteine `U`, gets null properties.
 
 - 2026-10-02: The built-in contaminant classifier flags and peels the `Cont_` accession marker of `sp|Cont_…` / `tr|Cont_…` headers, as in ProteoBench's FASTAs: `sp|Cont_P00722|BGAL_ECOLI` has accession `P00722` and `is_contaminant`. A removable prefix or suffix pattern may name a group `keep`, which peeling retains.
