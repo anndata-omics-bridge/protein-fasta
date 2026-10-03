@@ -1,8 +1,8 @@
 {
   "schema_version": "0.1",
-  "file_version": "1",
+  "file_version": "2",
   "format": "uniprotkb",
-  "detection_pattern": "^(?:sp|tr)\\|[^\\s|]+\\|[^\\s|]+_[^_\\s]+\\s+.+$",
+  "detection_pattern": "^(?:sp|tr)\\|[^\\s|]+\\|[^\\s|]+_[^_\\s]+(?:\\s+.+)?$",
   "columns": {
     "required": [
       {
@@ -38,14 +38,14 @@
         "name": "organism_mnemonic",
         "pattern": "^(?:sp|tr)\\|[^|]+\\|[^\\s]+_([^_\\s]+)(?:\\s|$)",
         "type": "string"
-      },
+      }
+    ],
+    "optional": [
       {
         "name": "protein_name",
         "pattern": "^(?:sp|tr)\\|[^|]+\\|[^\\s]+\\s+(.+?)(?:\\sOS=|\\sOX=|\\sGN=|\\sPE=|\\sSV=|$)",
         "type": "string"
-      }
-    ],
-    "optional": [
+      },
       {
         "name": "organism_name",
         "pattern": "(?:^|\\s)OS=(.+?)(?:\\sOX=|\\sGN=|\\sPE=|\\sSV=|$)",

@@ -1,6 +1,6 @@
 {
   "schema_version": "0.1",
-  "file_version": "2",
+  "file_version": "3",
   "classifiers": [
     {
       "name": "decoy",
@@ -20,7 +20,8 @@
       "removable_prefix_patterns": [
         "^CON__",
         "^CON_",
-        "^CONTAMINANT_"
+        "^CONTAMINANT_",
+        "^(?P<keep>(?:sp|tr)\\|)Cont_"
       ],
       "removable_suffix_patterns": []
     }

@@ -237,6 +237,27 @@ def test_recognized_rows_are_enriched_beside_unknown_rows(tmp_path: Path) -> Non
     assert frame["sequence"].to_list() == ["AA", "BB"]
 
 
+def test_uniprot_header_without_description_is_parsed(tmp_path: Path) -> None:
+    frame = read_protein_frame(_write_fasta(tmp_path, ">sp|Q495M9|USH1G_HUMAN\nAA\n"))
+
+    row = frame.row(0, named=True)
+    assert row["database"] == "uniprotkb"
+    assert row["accession"] == "Q495M9"
+    assert row["entry_name"] == "USH1G_HUMAN"
+    assert row["organism_mnemonic"] == "HUMAN"
+    assert row["protein_name"] is None
+
+
+def test_cont_accession_is_peeled_to_the_plain_accession(tmp_path: Path) -> None:
+    frame = read_protein_frame(
+        _write_fasta(tmp_path, ">sp|Cont_P00722|BGAL_ECOLI\nAA\n>sp|P00722|BGAL_ECOLI\nAA\n")
+    )
+
+    assert frame["is_contaminant"].to_list() == [True, False]
+    assert frame["accession"].to_list() == ["P00722", "P00722"]
+    assert frame["id"].to_list() == ["sp|Cont_P00722|BGAL_ECOLI", "sp|P00722|BGAL_ECOLI"]
+
+
 def test_wholly_unknown_frame_returns_exact_base_columns(tmp_path: Path) -> None:
     assert read_protein_frame(_write_fasta(tmp_path, ">P1 generic\nAA\n")).columns == [
         "id",

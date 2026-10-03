@@ -65,12 +65,12 @@ class DiagnosticRules:
                 for pattern in classifier.removable_prefix_patterns:
                     match = pattern.match(working)
                     if match is not None:
-                        working = working[match.end() :]
+                        working = (match.groupdict().get("keep") or "") + working[match.end() :]
                         classifications.add(classifier.name)
                 for pattern in classifier.removable_suffix_patterns:
                     match = pattern.search(working)
                     if match is not None:
-                        working = working[: match.start()]
+                        working = working[: match.start()] + (match.groupdict().get("keep") or "")
                         classifications.add(classifier.name)
             if working == before_pass:
                 break

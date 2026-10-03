@@ -29,8 +29,9 @@ schema-free scalar or Polars runtime values.
 The packaged diagnostics recognize UniProt, bare UniProt accessions, PDB, RefSeq, GenBank,
 Ensembl, and neXtProt identifier shapes. The packaged classifier document contains only broadly
 used decoy prefixes (`REV_`, `DECOY_`, `reverse_`) and contaminant prefixes (`CON__`, `CON_`,
-`CONTAMINANT_`). Application conventions do not belong here: for example, fasta_gen owns its
-`aa|`, `sp|Cont_`, `zh|C...`, and `_p_target` rules in its own JSON document.
+`CONTAMINANT_`), plus the contaminant accession marker in `sp|Cont_` / `tr|Cont_`, peeled so the
+accession of `sp|Cont_P00722|BGAL_ECOLI` is `P00722`. Other application conventions do not belong here:
+for example, fasta_gen owns its `aa|`, `zh|C...`, and `_p_target` rules in its own JSON document.
 
 Use the packaged documents by omitting options, or consume explicit diagnostic and classifier JSON
 beside the command that uses them:
@@ -52,10 +53,10 @@ Release 0.2 activates exactly two database formats:
 
 | Format | Required enrichment | Optional enrichment |
 | --- | --- | --- |
-| UniProtKB | `database`, `review_status`, `accession`, `entry_name`, `entry_mnemonic`, `organism_mnemonic`, `protein_name` | `organism_name`, `taxonomy_id`, `gene_name`, `protein_existence`, `sequence_version` |
+| UniProtKB | `database`, `review_status`, `accession`, `entry_name`, `entry_mnemonic`, `organism_mnemonic` | `protein_name`, `organism_name`, `taxonomy_id`, `gene_name`, `protein_existence`, `sequence_version` |
 | RefSeq | `database`, `accession`, `protein_name` | `organism_name` |
 
-The complete UniProt entry name is preserved. `entry_mnemonic` and `organism_mnemonic` are separate
+A UniProtKB header needs no description: a bare `sp|Q495M9|USH1G_HUMAN` is detected, and its `protein_name` is null. The complete UniProt entry name is preserved. `entry_mnemonic` and `organism_mnemonic` are separate
 derived columns, while `sp` and `tr` become `reviewed` and `unreviewed` in `review_status`.
 
 Each extracted column declares its name, type, nullability through required/optional placement, and
@@ -67,7 +68,9 @@ column may additionally map captured values. Documents cannot replace `id`, `des
 
 Configured classifiers operate on the identifier token. Match expressions add labels without
 rewriting it. Removable prefix and suffix expressions both add a label and peel only a temporary
-working identifier. The public `id`, `description`, and raw header remain unchanged.
+working identifier. The public `id`, `description`, and raw header remain unchanged. A removable
+pattern's named group `keep` survives peeling: `^(?P<keep>(?:sp|tr)\|)Cont_` turns
+`sp|Cont_P00722|BGAL_ECOLI` into `sp|P00722|BGAL_ECOLI`.
 
 Prefix and suffix rules are applied repeatedly in authored order until a complete pass consumes
 nothing. Database detection and extraction then use the fully undecorated working header. This

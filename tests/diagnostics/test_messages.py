@@ -2,12 +2,18 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import pytest
 
 from protein_fasta.diagnostics.messages import describe_illegal_residues
-from protein_fasta.diagnostics.runtime import UNMATCHED_NAMESPACE
+from protein_fasta.diagnostics.runtime import (
+    UNMATCHED_NAMESPACE,
+    DiagnosticRules,
+    EntryClassifier,
+    NamespaceRule,
+)
 from protein_fasta.registry.rules import RegistryDiagnosticRules, load_registry_diagnostics
 from protein_fasta.validation.sequence import normalize_sequence
 
@@ -95,3 +101,23 @@ def test_invalid_document_reports_its_path(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError, match=str(path)):
         load_registry_diagnostics(path)
+
+
+def test_a_keep_group_survives_peeling_in_record_diagnostics() -> None:
+    rules = DiagnosticRules(
+        namespace_rules=(NamespaceRule("uniprot", re.compile(r"^(?:sp|tr)\|[A-Z0-9]+\|")),),
+        classifiers=(
+            EntryClassifier(
+                name="contaminant",
+                match_patterns=(),
+                removable_prefix_patterns=(re.compile(r"^(?P<keep>(?:sp|tr)\|)Cont_"),),
+                removable_suffix_patterns=(),
+            ),
+        ),
+        allowed_residues="A",
+    )
+
+    assert rules.diagnose_identifier("sp|Cont_P00722|BGAL_ECOLI") == (
+        "uniprot",
+        frozenset({"contaminant"}),
+    )

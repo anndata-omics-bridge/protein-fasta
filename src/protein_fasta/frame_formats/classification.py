@@ -13,6 +13,8 @@ from protein_fasta.frame_formats.runtime import (
 _ID = "id"
 _DESCRIPTION = "description"
 _WORKING_IDENTIFIER = "__working_identifier"
+# A removable pattern's named group ``keep`` survives peeling; without it the match is removed.
+_KEEP = "${keep}"
 WORKING_HEADER = "__working_header"
 
 
@@ -38,11 +40,11 @@ def append_classifications(
             for pattern in classifier.removable_prefix_patterns:
                 matches = working.str.contains(pattern)
                 flags[classifier.name] = flags[classifier.name] | matches
-                working = working.str.replace(pattern, "", n=1)
+                working = working.str.replace(pattern, _KEEP, n=1)
             for pattern in classifier.removable_suffix_patterns:
                 matches = working.str.contains(pattern)
                 flags[classifier.name] = flags[classifier.name] | matches
-                working = working.str.replace(pattern, "", n=1)
+                working = working.str.replace(pattern, _KEEP, n=1)
         if working.equals(before_pass):
             break
 
