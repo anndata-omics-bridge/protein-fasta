@@ -103,7 +103,7 @@ class ProteinDatabase:
             }
         )
 
-    def parse(self, paths: tuple[Path, ...], /) -> pl.DataFrame:
+    def parse(self, paths: tuple[Path, ...]) -> pl.DataFrame:
         """Return one source-aware frame for FASTA paths, or the Parquet file `write_parquet` made.
 
         Raises:
@@ -119,7 +119,7 @@ class ProteinDatabase:
             return pl.DataFrame(schema=self._schema)
         return pl.concat(frames, how="vertical")
 
-    def write_parquet(self, paths: tuple[Path, ...], target: Path, /) -> None:
+    def write_parquet(self, paths: tuple[Path, ...], target: Path) -> None:
         """Parse FASTA paths once and store the frame for later `parse` calls.
 
         The file records this database's format and classifier versions, so `parse` refuses it
@@ -160,12 +160,12 @@ class ProteinDatabase:
         )
 
 
-def read_basic_protein_frame(path: Path, /) -> pl.DataFrame:
+def read_basic_protein_frame(path: Path) -> pl.DataFrame:
     """Return exactly the normalized base protein columns."""
     return select_columns(_read_internal_frame(path), _BASE_COLUMNS)
 
 
-def read_protein_frame(path: Path, /) -> pl.DataFrame:
+def read_protein_frame(path: Path) -> pl.DataFrame:
     """Enrich each row accepted by exactly one packaged parser."""
     return _read_with_runtime(
         path,
@@ -187,7 +187,6 @@ def read_configured_protein_frame(
     path: Path,
     catalog: HeaderFormatCatalogDocument,
     classifiers: EntryClassifierCatalogDocument,
-    /,
 ) -> pl.DataFrame:
     """Enrich each row accepted by exactly one explicit parser."""
     return _read_with_runtime(

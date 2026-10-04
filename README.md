@@ -20,7 +20,7 @@ The stable high-level Python record is exactly `id`, optional `description`, and
 ```python
 from pathlib import Path
 
-from protein_fasta.record import iter_proteins
+from protein_fasta.api import iter_proteins
 
 for protein in iter_proteins(Path("proteins.fasta.gz")):
     print(protein.id, protein.sequence)
@@ -44,7 +44,7 @@ from protein_fasta.documents import (
     load_builtin_diagnostic_document,
     load_builtin_entry_classifier_document,
 )
-from protein_fasta.record import iter_protein_diagnostics
+from protein_fasta.api import iter_protein_diagnostics
 
 rules = make_diagnostic_rules(
     load_builtin_diagnostic_document(),
@@ -94,7 +94,7 @@ Lower-level callers may choose the exact base table or automatic row-wise enrich
 ```python
 from pathlib import Path
 
-from protein_fasta.frame import read_basic_protein_frame, read_protein_frame
+from protein_fasta.api import read_basic_protein_frame, read_protein_frame
 
 base = read_basic_protein_frame(Path("mixed.fasta"))
 best = read_protein_frame(Path("uniprot.fasta"))

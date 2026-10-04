@@ -97,7 +97,7 @@ from protein_fasta.documents import (
     load_entry_classifier_document,
     load_header_format_catalog,
 )
-from protein_fasta.frame import read_configured_protein_frame
+from protein_fasta.api import read_configured_protein_frame
 
 catalog = load_header_format_catalog(
     (Path("rules/uniprotkb.json"), Path("rules/refseq.json"))

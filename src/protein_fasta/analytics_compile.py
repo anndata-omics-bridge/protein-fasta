@@ -32,6 +32,6 @@ def compile_digestion(
     )
 
 
-def make_digestion(document: DigestionDocument, /) -> Digestion:
+def make_digestion(document: DigestionDocument) -> Digestion:
     """Resolve and compile one digestion against its packaged enzyme rule."""
     return compile_digestion(document, load_builtin_enzyme_document(document.enzyme))

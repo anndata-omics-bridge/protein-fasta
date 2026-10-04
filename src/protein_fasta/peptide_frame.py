@@ -23,7 +23,7 @@ _SCHEMA: dict[str, type[pl.DataType]] = {
 _NULL_PROPERTIES = (None,) * len(fields(PeptideProperties))
 
 
-def peptide_property_frame(sequences: Iterable[str], /) -> pl.DataFrame:
+def peptide_property_frame(sequences: Iterable[str]) -> pl.DataFrame:
     """Return one row of sequence-derived properties per peptide, in input order.
 
     Args:

@@ -17,8 +17,8 @@ entrapment are all included in the base installation.
 
 ## Python and command-line entry points
 
-The package intentionally has no top-level re-export facade. Programmatic callers import the
-smallest workflow or computation from its owning module, as in the examples below. The separate
+Other anndata_bridge packages import only from `protein_fasta.api`. Workflows not yet exported
+there are still imported from their owning modules, as some examples below show. The separate
 installed command-line entry point is `protein-fasta = protein_fasta.cli:main`; its workflow names
 are Cyclopts subcommands rather than additional console scripts.
 
@@ -31,7 +31,7 @@ the replayed products. Python callers construct or load the request document exp
 
 ```python
 from pathlib import Path
-from protein_fasta.record import iter_proteins
+from protein_fasta.api import iter_proteins
 
 for protein in iter_proteins(Path("database.fasta.gz")):
     print(protein.id, protein.description, protein.sequence)
@@ -86,9 +86,7 @@ schema.
 ## Hashing and digestion
 
 ```python
-from protein_fasta.analytics.hashing import file_checksum, peptide_hash, sequence_hash
-from protein_fasta.analytics_compile import make_digestion
-from protein_fasta.analytics.digestion import digest_sequence
+from protein_fasta.api import digest_sequence, file_checksum, make_digestion, peptide_hash, sequence_hash
 from protein_fasta.schema.analytics import DigestionDocument
 
 digestion = make_digestion(DigestionDocument(missed_cleavages=1))

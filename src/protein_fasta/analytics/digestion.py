@@ -39,7 +39,7 @@ def protein_residue_length(sequence: str, /) -> int:
     return sum(len(match.group()) for match in _LETTER_SEGMENT.finditer(sequence))
 
 
-def digest_sequence(sequence: str, digestion: Digestion, /) -> tuple[DigestedPeptide, ...]:
+def digest_sequence(sequence: str, digestion: Digestion) -> tuple[DigestedPeptide, ...]:
     """Return ordered peptide candidates from an already-normalized sequence."""
     _require_normalized(sequence)
     peptides: list[DigestedPeptide] = []

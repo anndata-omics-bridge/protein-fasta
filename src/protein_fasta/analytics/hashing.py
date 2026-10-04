@@ -23,7 +23,7 @@ CONTENT_FINGERPRINT_VERSION = "blake2b-128-id-sequence-pairs-v1"
 DESCRIPTION_SET_FINGERPRINT_VERSION = "blake2b-128-description-set-v1"
 
 
-def sequence_hash(sequence: str, /) -> bytes:
+def sequence_hash(sequence: str) -> bytes:
     """Hash exactly one supplied protein sequence with BLAKE2b-128.
 
     The caller owns normalization. This function deliberately does not change case,
@@ -32,12 +32,12 @@ def sequence_hash(sequence: str, /) -> bytes:
     return hashlib.blake2b(sequence.encode("ascii"), digest_size=_DIGEST_SIZE).digest()
 
 
-def peptide_hash(sequence: str, /) -> bytes:
+def peptide_hash(sequence: str) -> bytes:
     """Hash exactly one supplied peptide sequence with BLAKE2b-128."""
     return hashlib.blake2b(sequence.encode("ascii"), digest_size=_DIGEST_SIZE).digest()
 
 
-def file_checksum(path: Path, /) -> str:
+def file_checksum(path: Path) -> str:
     """Return an MD5 checksum of exact file bytes for non-security provenance."""
     digest = hashlib.md5(usedforsecurity=False)
     with path.open("rb") as source:

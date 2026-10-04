@@ -34,7 +34,7 @@ class ProteinDiagnostics:
     illegal_residues: str
 
 
-def iter_proteins(path: Path, /) -> Iterator[ProteinRecord]:
+def iter_proteins(path: Path) -> Iterator[ProteinRecord]:
     """Stream normalized protein records from a FASTA path."""
     for lexical in read_records(path):
         parsed = parse_header(lexical.raw_header)
@@ -45,7 +45,6 @@ def iter_proteins(path: Path, /) -> Iterator[ProteinRecord]:
 def iter_protein_diagnostics(
     path: Path,
     rules: DiagnosticRules,
-    /,
 ) -> Iterator[ProteinDiagnostics]:
     """Stream normalized records with configured diagnostic facts."""
     for lexical in read_records(path):
