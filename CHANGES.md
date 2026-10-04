@@ -1,6 +1,6 @@
 # Changes
 
-- 2026-10-04: `protein_fasta.api` is the module other anndata_bridge packages import: `ProteinDatabase`, `ProteinFormat`, `refseq`, `uniprotkb`, `iter_proteins`, `iter_protein_diagnostics`, `read_protein_frame`, `read_basic_protein_frame`, `read_configured_protein_frame`, `file_checksum`, `peptide_hash`, `sequence_hash`, `make_digestion`, `digest_sequence`, `peptide_property_frame`, `PeptideProperties`. Their signatures drop the `/` and `*` markers; every call that worked before still works.
+- 2026-10-04: `protein_fasta.api`, the module other anndata_bridge packages import, holds what apb-fasta uses: `ProteinDatabase`, `ProteinFormat`, `refseq`, `uniprotkb`, `peptide_property_frame`, `PeptideProperties`. Record, diagnostic, hashing and digestion functions are imported from their owning modules. Those functions and the frame readers drop the `/` and `*` signature markers; every call that worked before still works.
 
 - 2026-10-03: `ProteinDatabase.write_parquet(paths, target)` and the `database` command store a parsed protein frame; `parse((target,))` reads it back instead of the FASTA files, about 70 times faster on ProteoBench's 2.84 M-entry entrapment FASTA. The file records its format and classifier versions, and `parse` refuses it under another configuration.
 
