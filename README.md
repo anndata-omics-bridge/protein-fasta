@@ -77,7 +77,7 @@ accepted public formats when constructing `ProteinDatabase`, then supply the ord
 ```python
 from pathlib import Path
 
-from protein_fasta.frame import ProteinDatabase, refseq, uniprotkb
+from protein_fasta.api import ProteinDatabase, refseq, uniprotkb
 
 protein_database = ProteinDatabase(uniprotkb, refseq)
 proteins = protein_database.parse(

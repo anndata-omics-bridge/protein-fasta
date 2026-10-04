@@ -10,7 +10,7 @@ containers =
     protein_fasta
 exhaustive = True
 layers =
-    cli
+    cli | api
     candidate_analysis | database_build | decoy_database | decoy_report | diagnostic_summary | peptide_workflow | protein_input | uniprot_download | uniprot_catalog
     database_compile | decoy_compile | registry_workflow
     peptide

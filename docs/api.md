@@ -54,7 +54,7 @@ compiler machinery:
 ```python
 from pathlib import Path
 
-from protein_fasta.frame import ProteinDatabase, refseq, uniprotkb
+from protein_fasta.api import ProteinDatabase, refseq, uniprotkb
 
 protein_database = ProteinDatabase(uniprotkb, refseq)
 proteins = protein_database.parse(
@@ -107,7 +107,7 @@ missed-cleavage count.
 ## Peptide properties
 
 ```python
-from protein_fasta.peptide_frame import peptide_property_frame
+from protein_fasta.api import peptide_property_frame
 
 properties = peptide_property_frame(["KQPWWR", "EAAAMGPTK"])
 ```
