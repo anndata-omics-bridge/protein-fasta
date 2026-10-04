@@ -13,6 +13,16 @@ license-files = ["LICENSE", "LICENSES/*", "NOTICE"]
 authors = [
     { name = "Witold Wolski", email = "wew@fgcz.ethz.ch" },
 ]
+keywords = ["proteomics", "fasta", "protein database", "uniprot", "polars"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Bio-Informatics",
+    "Typing :: Typed",
+]
 dependencies = [
     "loguru>=0.7,<1",
     "pydantic>=2.13,<3",
@@ -43,6 +53,7 @@ duckdb = [
 ]
 
 [project.urls]
+Documentation = "https://anndata-omics-bridge.github.io/protein-fasta/"
 Repository = "https://github.com/anndata-omics-bridge/protein-fasta"
 
 [dependency-groups]

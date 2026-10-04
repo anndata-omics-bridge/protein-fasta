@@ -143,10 +143,10 @@ Replay one explicitly with `--request`; authored requests, resolved `*.effective
 
 The CLI also exposes aggregate diagnostics, theoretical digestion, checksums, database builds,
 registry indexing, database comparisons, materialized pair exports, and clustering. See the
-[build workflows](docs/workflows.md),
-[CLI guide and executable walkthrough](docs/cli_walkthrough.md),
-[API reference](docs/api.md), and maintained
-[architecture](docs/architecture.md).
+[build workflows](https://anndata-omics-bridge.github.io/protein-fasta/workflows/),
+[CLI guide and executable walkthrough](https://anndata-omics-bridge.github.io/protein-fasta/cli_walkthrough/),
+[API reference](https://anndata-omics-bridge.github.io/protein-fasta/api/), and maintained
+[architecture](https://anndata-omics-bridge.github.io/protein-fasta/architecture/).
 
 The package excludes site-specific curated contaminant/QC catalogs, GUI installation workflows,
 protein inference, and AnnData/MuData persistence. Those consumers compose the typed artifacts and
