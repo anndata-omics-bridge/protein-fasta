@@ -1,6 +1,7 @@
 # Protein FASTA
 
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.23151446.svg)](https://doi.org/10.5281/zenodo.23151446)
+[![PyPI](https://img.shields.io/pypi/v/protein-fasta.svg)](https://pypi.org/project/protein-fasta/)
 
 `protein-fasta` provides one shared protein-FASTA boundary with deliberately granular APIs:
 
