@@ -1,5 +1,7 @@
 # Changes
 
+- 2026-10-05: README shows the Zenodo DOI badge, linking the concept DOI that resolves to the latest archived release.
+
 - 2026-10-05: 0.3.1: new `CITATION.cff` with the author's ORCID, so the Zenodo archive of each GitHub release carries complete citation metadata and a DOI.
 
 - 2026-10-04: PyPI release setup: `.github/workflows/publish.yml` builds and checks the distributions, then publishes to PyPI through trusted publishing for a published GitHub release tagged `v<version>`; a manual run only builds and checks. README links point at the documentation site so they resolve on PyPI, and `pyproject.toml` adds keywords, classifiers and the documentation URL.

@@ -1,5 +1,7 @@
 # Protein FASTA
 
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.23151446.svg)](https://doi.org/10.5281/zenodo.23151446)
+
 `protein-fasta` provides one shared protein-FASTA boundary with deliberately granular APIs:
 
 - a constant-memory Python iterator returning minimal normalized records; and
