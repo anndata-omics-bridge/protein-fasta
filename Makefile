@@ -8,7 +8,7 @@ help:  ## Show developer commands
 		| awk 'BEGIN{FS=":.*?## "}{printf "  \033[36m%-14s\033[0m %s\n", $$1, $$2}'
 
 sync:  ## Synchronize the locked development environment
-	uv sync --frozen --group dev --group docs --extra cli --extra frame --extra duckdb
+	uv sync --group dev --group docs --extra cli --extra frame --extra duckdb
 
 schemas:  ## Regenerate committed Pydantic JSON Schemas
 	$(VENV_BIN)/python scripts/generate_json_schemas.py
@@ -70,10 +70,9 @@ build:  ## Build, validate, and smoke-test source and wheel distributions
 		tests/database_build/test_database_build.py::test_foreign_species_entrapment_does_not_claim_peptide_pairs
 
 docs:  ## Build documentation with strict warnings
-	uv run --frozen --group docs zensical build --clean --strict
+	uv run --group docs zensical build --clean --strict
 
 check:  ## Run every merge-blocking quality gate
-	uv lock --check
 	$(MAKE) format-check lint imports typecheck deps test build docs
 
 clean:  ## Remove generated build and quality artifacts

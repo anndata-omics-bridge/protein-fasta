@@ -62,10 +62,10 @@ dev = [
     "deptry>=0.24,<1",
     "import-linter>=2.9,<3",
     "pre-commit>=4,<5",
-    "pyright>=1.1.400,<2",
+    "pyright==1.1.414",
     "pytest>=9,<10",
     "pytest-cov>=7,<8",
-    "ruff>=0.15,<1",
+    "ruff==0.16.10",
     "twine>=6,<7",
 ]
 docs = [

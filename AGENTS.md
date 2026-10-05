@@ -6,7 +6,7 @@ The closest `AGENTS.md` wins. Explicit user instructions override this file.
 
 | Task | Command |
 | --- | --- |
-| Synchronize | `uv sync --frozen --group dev --extra cli --extra frame --extra duckdb` |
+| Synchronize | `uv sync --group dev --extra cli --extra frame --extra duckdb` |
 | Format | `.venv/bin/ruff format src tests benchmarks scripts docs_macros.py && .venv/bin/ruff check --fix src tests benchmarks scripts docs_macros.py` |
 | Lint | `.venv/bin/ruff check src tests benchmarks scripts docs_macros.py` |
 | Typecheck | `.venv/bin/pyright` |
@@ -56,7 +56,7 @@ metadata construction do not own analytical hashes or registry persistence.
 - Declare every imported runtime dependency directly in `[project.dependencies]`.
 - Put tests, linting, typing, building, and documentation tools in dependency
   groups; optional user-facing capabilities belong in extras.
-- Update `pyproject.toml` and `uv.lock` together and run `make check`.
+- Update `pyproject.toml` and run `make check`; the repository commits no `uv.lock`.
 
 ### SHOULD
 
