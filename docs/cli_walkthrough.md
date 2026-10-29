@@ -153,7 +153,7 @@ checksum, byte size, and warnings.
 
 ## Executable offline walkthrough
 
-The remainder of this page executes 21 of the 24 subcommands against two deterministic 50-entry
+The remainder of this page executes 21 of the 25 subcommands against two deterministic 50-entry
 UniProtKB FASTA files and one 50-entry mixed UniProtKB/RefSeq file. The console blocks are not
 pasted examples: Zensical runs them during `make docs`, captures their output, and fails the build
 if any command exits non-zero.

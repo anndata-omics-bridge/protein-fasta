@@ -14,11 +14,7 @@ The installed distribution declares one console script:
 protein-fasta = "protein_fasta.cli:main"
 ```
 
-Cyclopts exposes the operations beneath that entry point as subcommands; `build`, `decoy`,
-`prepare`, `peptides`, `uniprot-download`, and the registry commands are not separate executables.
-Programmatic callers import the workflow functions from their owning modules. The package has no
-top-level re-export facade: empty package initializers keep ownership and dependency direction
-visible.
+Cyclopts exposes the operations beneath that entry point as subcommands; `build`, `decoy`, `prepare`, `peptides`, `uniprot-download`, and the registry commands are not separate executables. Other anndata_bridge packages import only from `protein_fasta.api`, which re-exports what apb-fasta uses: `ProteinDatabase`, its formats, and peptide properties. Everything else, including the workflow functions, is imported from its owning module; empty package initializers keep ownership and dependency direction visible.
 
 The package has an explicit inward dependency structure enforced by Import Linter:
 
@@ -49,6 +45,7 @@ folder rule described below.
 | Module or package | Responsibility |
 | --- | --- |
 | `cli.py` | Single Cyclopts/Loguru delivery and composition adapter |
+| `api.py` | Re-exports of the names other anndata_bridge packages import |
 | `artifact_io.py` | Atomic artifact publication, JSON persistence, and artifact evidence |
 | `record.py`, `frame.py` | Minimal Python records and optional Polars table products |
 | `diagnostic_summary.py`, `summary.py` | Aggregate diagnostic and sequence statistics |
@@ -66,6 +63,7 @@ folder rule described below.
 | `protein_input.py`, `database_build.py` | Source preparation and biological assembly roots |
 | `decoy_database.py`, `decoy_report.py` | Search-database generation and method diagnostics |
 | `peptide/`, `peptide_workflow.py` | Peptide model, executors, artifacts, and comparisons |
+| `peptide_frame.py` | Polars frame of sequence-derived peptide properties |
 | `uniprot/`, `uniprot_catalog.py`, `uniprot_download.py` | Provider transport, catalog, resolution, and acquisition |
 | `registry/indexing.py` | FASTA/inventory indexing, schema version 11, and typed records |
 | `registry/comparisons.py`, `pair_metrics.py` | Storage queries for database comparisons |

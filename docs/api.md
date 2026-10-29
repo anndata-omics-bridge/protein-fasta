@@ -10,6 +10,7 @@ pip install protein-fasta
 pip install 'protein-fasta[frame]'
 pip install 'protein-fasta[duckdb]'
 pip install 'protein-fasta[cli]'
+pip install 'protein-fasta[uniprot]'
 ```
 
 Reverse, shuffle, DecoyPYrat, shuffled-peptide entrapment, and foreign-species

@@ -49,7 +49,7 @@ defines its label/output column plus match and removable prefix/suffix expressio
 
 ## One rule file per database
 
-Release 0.2 activates exactly two database formats:
+The package activates exactly two database formats:
 
 | Format | Required enrichment | Optional enrichment |
 | --- | --- | --- |
