@@ -51,14 +51,14 @@ application. Sequence and peptide hashes are versioned BLAKE2b-128 over already-
 supplied values; exact-file provenance is versioned non-security MD5. Build naming and `aa|`
 metadata construction do not own analytical hashes or registry persistence.
 
-### MUST
+### Required
 
 - Declare every imported runtime dependency directly in `[project.dependencies]`.
 - Put tests, linting, typing, building, and documentation tools in dependency
   groups; optional user-facing capabilities belong in extras.
 - Update `pyproject.toml` and run `make check`; the repository commits no `uv.lock`.
 
-### SHOULD
+### Recommended
 
 - Prefer the standard library, then an existing direct dependency, then a small,
   maintained, typed dependency.
@@ -66,7 +66,7 @@ metadata construction do not own analytical hashes or registry persistence.
 - Keep the executable CLI walkthrough shell-first: authored commands live in its Markdown page,
   Zensical captures them through `docs_macros.py`, and `make docs` must fail on command drift.
 
-### MUST NOT
+### Forbidden
 
 - Depend on unpinned branches or undeclared transitive dependencies.
 - Add parallel manifests, lockfiles, formatters, type checkers, or test runners.
