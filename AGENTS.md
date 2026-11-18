@@ -78,3 +78,7 @@ metadata construction do not own analytical hashes or registry persistence.
 2. Add or update focused tests with each behavioral change.
 3. Run the smallest relevant check while iterating.
 4. Run `make check` before handoff and report its actual result.
+
+## Output style
+
+Every reply must follow the output style that `outputStyle` selects in [settings.json](/Users/wolski/.claude/settings.json), currently [Answer-first](/Users/wolski/.claude/output-styles/answer-first.md). Read that file if your harness does not load it. No exceptions for long, investigative or follow-up replies.
